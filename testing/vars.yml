@@ -1,6 +1,6 @@
 # This file is not automatically injected during the testing. 
 # You must add vars_files:
-#    - testing/vars.yml
+#    - vars.yml
 # in testing/being_tested.yml for it to be considered.
 ---
 SSH_USERLIST:
