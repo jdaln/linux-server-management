@@ -1,4 +1,4 @@
-ansible
-ansible-lint
-passlib
-jmespath
+ansible~=9.5.1
+ansible-lint~=24.2.3
+passlib~=1.7.4
+jmespath~=1.0.1
