@@ -1,0 +1,134 @@
+name: "deps: new konstruktoid.hardening version testing"
+
+on:
+  pull_request: # Triggered on pull request events for the specified branches
+    branches:
+      - main 
+jobs:
+  vagrant-test-new-deps-version:
+    if: startsWith(github.head_ref, 'renovate/') # Checks if the source branch starts with "renovate/"
+    runs-on: ubuntu-22.04
+    env:
+      VAGRANT_DIR: ~/.vagrant.d/boxes
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # Checks out the repository code for use in actions, ensuring actions can interact with repository content
+
+      - name: Install Dependencies for this to run
+        run: |
+          sudo apt update
+          sudo apt -y install apt-transport-https ca-certificates curl software-properties-common
+          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          sudo apt-get update
+          sudo apt-get install -y virtualbox virtualbox-dkms vagrant python3-pip
+          vagrant plugin install vagrant-vbguest
+          vagrant plugin install vagrant-disksize
+
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            /var/cache/apt/archives
+            /var/lib/apt/lists
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/Dockerfile') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+        # Caches the downloaded apt packages to save time and bandwidth on subsequent runs
+
+      - name: Install requirements for Python and Ansible
+        run: |
+          pip install -r requirements.txt
+          ansible-galaxy install -r requirements.yml
+          ansible-galaxy install -r testing/requirements.yml
+
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/requirements.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+            ${{ runner.os }}-pip-
+        # Caches the downloaded Python packages to save time and bandwidth on subsequent runs
+
+      - name: Prepare Ansible playbook for testing and remove unwanted vars for this test
+        run: | 
+          cp testing/test-new-version-hardening.yml testing/being_tested.yml
+        # Copies the setup-playbook.yml to the testing directory and renames it for test execution
+
+
+      - name: Run vagrant up
+        run: vagrant up
+        # Initializes and provisions the Vagrant environment as defined in Vagrantfile
+
+      - name: SSH into the box after boot
+        run: |
+          vms=$(vagrant status | grep 'running (' | cut -d' ' -f1)
+
+          for vm in $vms; do
+              echo "Running command on VM: $vm"
+              vagrant ssh $vm -c "echo 'hello world!'"
+          done
+        # Tests SSH into the Vagrant boxex and runs a simple echo command to ensure functionality
+
+      - name: Cache Vagrant boxes
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.VAGRANT_DIR }}
+          key: ${{ runner.os }}-vagrant-${{ hashFiles('**/Vagrantfile') }}
+          restore-keys: |
+            ${{ runner.os }}-vagrant-
+        # Caches the downloaded Vagrant boxes to save time and bandwidth on subsequent runs
+      
+      - name: Clean up Vagrant session
+        run: vagrant halt && vagrant destroy -f
+        if: always()
+        # Gracefully shuts down and cleans up the Vagrant environment, ensuring no resources are left running
+
+  update-version-in-playbook:
+    needs: vagrant-test-new-deps-version  # This job runs after vagrant-test-new-deps-version succeeds
+    runs-on: ubuntu-latest
+    if: success() && startsWith(github.event.pull_request.title, 'Update dependency konstruktoid.hardening to v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Extract version from MR title
+        id: get_version
+        run: |
+          echo "VERSION=$(echo ${{ github.event.pull_request.title }} | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*')" >> $GITHUB_ENV
+
+      - name: Extract branch name
+        id: vars
+        run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
+
+      - name: Update setup-playbook.yml with new version
+        run: |
+          sed -i "s/version: 'v[0-9]*\.[0-9]*\.[0-9]*'/version: '${{ env.VERSION }}'/" setup-playbook.yml
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add setup-playbook.yml
+          git commit -m "Update konstruktoid.hardening version in use to version ${{ env.VERSION }}"
+          git push
+
+      - name: Check for unauthorized file modifications due to being on public workers with write access to repo
+        run: |
+          CHANGES=$(git diff --name-only HEAD~1)
+          echo "Changed files:"
+          echo "$CHANGES"
+          # Check if there are any changes that do NOT match 'setup-playbook.yml'
+          if echo "$CHANGES" | grep -vqE '^setup-playbook\.yml$'; then
+            echo "PR contains unauthorized file modifications."
+            exit 1  # Fail the action if unauthorized changes are detected
+          else
+            echo "All changes are authorized."
+          fi

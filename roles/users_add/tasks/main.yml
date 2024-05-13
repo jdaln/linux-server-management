@@ -1,0 +1,32 @@
+- name: Add users
+  ansible.builtin.user:
+    name: "{{ item.username }}"
+    comment: "{{ item.username }} account. Is admin? {{ item.admin }}"
+    shell: /bin/bash
+  loop: "{{ users_add_userlist | default([]) }}"
+
+- name: Add additional public keys
+  ansible.posix.authorized_key:
+    key: "{{ item.public_key }}"
+    user: "{{ item.username }}"
+    state: present
+    comment: "{{ item.username }} key"
+  loop: "{{ users_add_userlist | default([]) }}"
+
+- name: Add all users who should be admin to sudo
+  ansible.builtin.lineinfile:
+    path: "/etc/sudoers.d/{{ item.username }}"
+    line: "{{ item.username }} ALL=(ALL) NOPASSWD: ALL"
+    state: present
+    mode: '0440'
+    create: true
+    validate: '/usr/sbin/visudo -cf %s'
+  loop: "{{ users_add_userlist | default([]) }}"
+  when: item.admin
+
+- name: Set includedir in sudoers to make sure our additions work
+  ansible.builtin.lineinfile:
+    dest: /etc/sudoers
+    line: "#includedir /etc/sudoers.d"
+    state: present
+    validate: "/usr/sbin/visudo -cf %s"

@@ -1,0 +1,26 @@
+# This file is not automatically injected during the testing. 
+# You must add vars_files:
+#    - testing/vars.yml
+# in testing/being_tested.yml for it to be considered.
+---
+SSH_USERLIST:
+  - username: user1
+    admin: true
+    public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAWJD3NJOPnhGRnvCyILZ4GQ2cMyl96StalB5Fo2FgVY0Ei fakeKeyToTestTheRole
+AUDITD_ACTION_MAIL_ACCT: root
+MANAGE_UFW: true
+UFW_OUTGOING_TRAFFIC:
+  - 22
+  - 53
+  - 80
+  - 123
+  - 443
+  - 853
+  - 465
+DISABLE_WIRELESS: true
+REBOOT_UBUNTU: true
+SSHD_ADMIN_NET:
+  - 0.0.0.0/0 # ssh can be made from a public IP
+SSHD_LOGIN_GRACE_TIME: 60
+SSHD_MAX_AUTH_TRIES: 5
+SUID_SGID_PERMISSIONS: true

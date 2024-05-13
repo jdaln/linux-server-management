@@ -1,0 +1,46 @@
+---
+- name: Checkout and configure konstruktoid.hardening
+  hosts: all
+  any_errors_fatal: true
+  tasks:
+
+    - name: Add users
+      ansible.builtin.include_role:
+        name: users_add
+        apply:
+          become: true
+      vars:
+        users_add_userlist: "{{ SSH_USERLIST }}"
+
+    - name: Ensure role directory for konstruktoid.hardening exists
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Clone hardening repository
+      ansible.builtin.git:
+        repo: https://github.com/konstruktoid/ansible-role-hardening.git
+        dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
+        version: 'v2.0.3'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Include the hardening role
+      ansible.builtin.include_role:
+        name: konstruktoid.hardening
+      vars:
+        auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
+        manage_ufw: "{{ MANAGE_UFW }}"
+        ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
+        disable_wireless: "{{ DISABLE_WIRELESS }}"
+        reboot_ubuntu: "{{ REBOOT_UBUNTU }}"
+        sshd_admin_net: "{{ SSHD_ADMIN_NET }}"
+        sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"
+        sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"
+        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME }}"
+        sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES }}"
+        suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS }}"
+        # suid_sgid_blocklist: #might need edit
