@@ -91,7 +91,7 @@ jobs:
   update-version-in-playbook:
     needs: vagrant-test-new-deps-version  # This job runs after vagrant-test-new-deps-version succeeds
     runs-on: ubuntu-latest
-    if: success() && startsWith(github.event.pull_request.title, 'Update dependency konstruktoid.hardening to v')
+    if: success() && startsWith(github.head_ref, 'renovate/')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
