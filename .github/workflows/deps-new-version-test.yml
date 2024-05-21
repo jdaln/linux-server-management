@@ -91,7 +91,7 @@ jobs:
   update-version-in-playbook:
     needs: vagrant-test-new-deps-version  # This job runs after vagrant-test-new-deps-version succeeds
     runs-on: ubuntu-latest
-    if: success() && startsWith(github.head_ref, 'renovate/')
+    if: success() && contains(github.event.pull_request.title, 'konstruktoid.hardening')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -102,7 +102,9 @@ jobs:
       - name: Extract version from MR title
         id: get_version
         run: |
-          echo "VERSION=$(echo ${{ github.event.pull_request.title }} | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*')" >> $GITHUB_ENV
+          TITLE="${{ github.event.pull_request.title }}"
+          VERSION=$(echo "$TITLE" | grep -o 'v[0-9]*\.[0-9]*\.[0-9]*')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Extract branch name
         id: vars
