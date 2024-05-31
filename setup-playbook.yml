@@ -12,7 +12,14 @@
       vars:
         users_add_userlist: "{{ SSH_USERLIST }}"
 
-    - name: Ensure role directory for konstruktoid.hardening exists
+    - name: Ensure role directory for konstruktoid.hardening does not exist
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
+        state: absent
+      delegate_to: localhost
+      run_once: true
+
+    - name: Create the empty directory
       ansible.builtin.file:
         path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
         state: directory
@@ -43,4 +50,5 @@
         sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME }}"
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES }}"
         suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS }}"
+        sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"
         # suid_sgid_blocklist: #might need edit
