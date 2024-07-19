@@ -39,6 +39,7 @@
       ansible.builtin.include_role:
         name: konstruktoid.hardening
       vars:
+        # noqa: var-naming[no-role-prefix]
         auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
         manage_ufw: "{{ MANAGE_UFW }}"
         ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"

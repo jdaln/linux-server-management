@@ -1,17 +1,26 @@
-# deb-server-management
-Server management playbooks
+# linux-server-management
+Server management playbooks for Debian/Ubuntu based Linux.
 
 ### Pre-requisites
+
 Pre-requisite commands depends on your OS.
+Install the software needed to launch this and its automated testing scripts:
+
+#### Debian-based Linux
+```
+sudo apt update
+sudo apt install virtualbox vagrant python3-pip
+```
 
 #### Mac OS
-Then, install the software needed to launch this and its automatic testing:
 ```
-brew install vagrant
+brew install python
+python3 -m ensurepip --upgrade
 brew install --cask virtualbox
+brew install vagrant
 ```
 
-### Before running anything from this repository
+### Before running anything
 Before running anything from this repository, install the following (after the Pre-requisites specific to your OS)
 ```
 pip install -r requirements.txt

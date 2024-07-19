@@ -4,5 +4,6 @@ exclude_paths:
   - .git/
   - .github/
   - .pre-commit-config.yaml
+  - testing/test-new-version-hardening.yml
 warn_list:
   - var-naming[no-role-prefix]

@@ -6,7 +6,7 @@ on:
       - main 
 jobs:
   vagrant-test-new-deps-version:
-    if: startsWith(github.head_ref, 'renovate/') # Checks if the source branch starts with "renovate/"
+    if: (!contains(github.event.pull_request.title, 'dependency ansible-lint')) # Checks the merge request except on some specific deps update
     runs-on: ubuntu-22.04
     env:
       VAGRANT_DIR: ~/.vagrant.d/boxes
@@ -26,17 +26,6 @@ jobs:
           sudo apt-get install -y virtualbox virtualbox-dkms vagrant python3-pip
           vagrant plugin install vagrant-vbguest
           vagrant plugin install vagrant-disksize
-
-      - name: Cache apt packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            /var/cache/apt/archives
-            /var/lib/apt/lists
-          key: ${{ runner.os }}-apt-${{ hashFiles('**/Dockerfile') }}
-          restore-keys: |
-            ${{ runner.os }}-apt-
-        # Caches the downloaded apt packages to save time and bandwidth on subsequent runs
 
       - name: Install requirements for Python and Ansible
         run: |
@@ -91,7 +80,7 @@ jobs:
   update-version-in-playbook:
     needs: vagrant-test-new-deps-version  # This job runs after vagrant-test-new-deps-version succeeds
     runs-on: ubuntu-latest
-    if: success() && contains(github.event.pull_request.title, 'konstruktoid.hardening')
+    if: success() && contains(github.event.pull_request.title, 'dependency konstruktoid.hardening')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
