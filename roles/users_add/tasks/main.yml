@@ -1,9 +1,14 @@
-- name: Add users
+- name: Create user accounts and force password change on first login
   ansible.builtin.user:
     name: "{{ item.username }}"
+    state: present
     comment: "{{ item.username }} account. Is admin? {{ item.admin }}"
     shell: /bin/bash
+    password: "{{ item.initialpassword | default(GENERALINITIALPASSWORD) | password_hash('sha512') }}"
+      # Sets the initial password that is prompted to change at first ssh login with pubkey (only)
+    update_password: on_create  # This ensures the password is only set when the user is created
   loop: "{{ users_add_userlist | default([]) }}"
+  notify: Force password change on first login
 
 - name: Add additional public keys
   ansible.posix.authorized_key:
@@ -16,13 +21,29 @@
 - name: Add all users who should be admin to sudo
   ansible.builtin.lineinfile:
     path: "/etc/sudoers.d/{{ item.username }}"
-    line: "{{ item.username }} ALL=(ALL) NOPASSWD: ALL"
+    line: "{{ item.username }} ALL=(ALL) ALL"
     state: present
     mode: '0440'
     create: true
     validate: '/usr/sbin/visudo -cf %s'
   loop: "{{ users_add_userlist | default([]) }}"
   when: item.admin
+
+- name: Allow non-admin users to run system updates/upgrades
+  ansible.builtin.blockinfile:
+    path: "/etc/sudoers.d/{{ item.username }}"
+    block: |
+      # User {{ item.username }} can run system updates without a password
+      {{ item.username }} ALL=(ALL) {{ item.non_admin_allowed_commands }}
+    state: present
+    create: true
+    mode: '0440'
+    validate: '/usr/sbin/visudo -cf %s'
+  loop: "{{ users_add_userlist | default([]) }}"
+  when:
+    - not item.admin
+    - item.non_admin_allowed_commands is defined
+    - item.non_admin_allowed_commands | length > 0
 
 - name: Set includedir in sudoers to make sure our additions work
   ansible.builtin.lineinfile:

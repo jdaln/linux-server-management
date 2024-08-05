@@ -41,5 +41,5 @@ The `ask-pass`
 To run the setup playbook use:
 ```
 BASTION_USER="YOUR_USERNAME_TO_SSH_WITH"
-ansible-playbook -i inventories/mip-cscs/inventory -l GROUP_OR_HOST_NAME -u $BASTION_USER setup-playbook.yml
+ansible-playbook -i inventories/mip-cscs/inventory -l GROUP_OR_HOST_NAME -u $BASTION_USER setup-playbook.yml #add -K when sudo password is set
 ```
