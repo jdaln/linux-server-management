@@ -1,7 +1,14 @@
+- name: Create groups for users
+  ansible.builtin.group:
+    name: "{{ item.username }}"
+    state: present
+  loop: "{{ users_add_userlist | default([]) }}"
+
 - name: Create user accounts and force password change on first login
   ansible.builtin.user:
     name: "{{ item.username }}"
     state: present
+    group: "{{ item.username }}"  # Ensures a group with the username is created/used as the primary group
     comment: "{{ item.username }} account. Is admin? {{ item.admin }}"
     shell: /bin/bash
     password: "{{ item.initialpassword | default(GENERALINITIALPASSWORD) | password_hash('sha512') }}"
