@@ -31,7 +31,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-hardening.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
-        version: 'v2.1.1'
+        version: 'v2.2.0'
       delegate_to: localhost
       run_once: true
 
@@ -40,12 +40,14 @@
         name: konstruktoid.hardening
       vars:
         # noqa: var-naming[no-role-prefix]
-        automatic_updates: true
+        automatic_updates: "{{ AUTO_UPDATES_OPTIONS }}"
+        logind: "{{ LOGIND_HARDENING }}"
         auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
         manage_ufw: "{{ MANAGE_UFW }}"
         ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
         disable_wireless: "{{ DISABLE_WIRELESS }}"
         reboot_ubuntu: "{{ REBOOT_UBUNTU }}"
+        session_timeout: "{{ SESSION_TIMEOUT | default(900) }}"
         sshd_admin_net: "{{ SSHD_ADMIN_NET }}"
         sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"
         sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"
@@ -53,3 +55,4 @@
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES }}"
         suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS }}"
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"
+        sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(600) }}"

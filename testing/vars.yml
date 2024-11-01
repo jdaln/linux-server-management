@@ -24,3 +24,17 @@ SSHD_ADMIN_NET:
 SSHD_LOGIN_GRACE_TIME: 60
 SSHD_MAX_AUTH_TRIES: 5
 SUID_SGID_PERMISSIONS: true
+AUTO_UPDATES_OPTIONS:
+  enabled: true
+  only_security: true
+  reboot: true
+  reboot_from_time: "2:00"
+  reboot_time_margin_mins: "20" # Random interval for reboot to avoid overloading hypervisors
+LOGIND_HARDENING:
+  killuserprocesses: true
+  killexcludeusers:
+    - root
+    - vagrant
+  idleaction: lock
+  idleactionsec: 15min
+  removeipc: true
