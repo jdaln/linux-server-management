@@ -7,7 +7,7 @@ on:
 jobs:
   vagrant-test-new-deps-version:
     if: (!contains(github.event.pull_request.title, 'dependency ansible-lint')) # Checks the merge request except on some specific deps update
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       VAGRANT_DIR: ~/.vagrant.d/boxes
 
