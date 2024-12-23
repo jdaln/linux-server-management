@@ -1,21 +1,31 @@
 Vagrant.configure("2") do |config|
+  #### patch until fix https://github.com/hashicorp/vagrant/issues/13404#issuecomment-2490437792
+  config.vagrant.plugins = {
+    'vagrant-vbguest' => {
+      'sources' =>[
+        'vagrant-vbguest-0.32.1.gem',
+        'https://rubygems.org/', # needed but not used
+      ],
+    }
+  }
+  #######
   config.vbguest.installer_options = { allow_kernel_upgrade: true }
   config.vm.provider "virtualbox" do |vb|
     vb.customize ["modifyvm", :id, "--uart1", "0x3F8", "4"]
     vb.customize ["modifyvm", :id, "--uartmode1", "disconnected"]
   end
 
-  config.vm.define "bullseye_vlan" do |bullseye_vlan|
-    bullseye_vlan.vm.box = "debian/bullseye64"
-    bullseye_vlan.ssh.insert_key = true
-    bullseye_vlan.vm.hostname = "bullseye-vlan"
-    bullseye_vlan.vm.boot_timeout = 600
-    bullseye_vlan.vbguest.auto_update = false
-    bullseye_vlan.vm.provision "shell",
+  config.vm.define "bookworm_vlan" do |bookworm_vlan|
+    bookworm_vlan.vm.box = "debian/bookworm64"
+    bookworm_vlan.ssh.insert_key = true
+    bookworm_vlan.vm.hostname = "bookworm-vlan"
+    bookworm_vlan.vm.boot_timeout = 600
+    bookworm_vlan.vbguest.auto_update = false
+    bookworm_vlan.vm.provision "shell",
       inline: "ip link set dev eth0 down; ip link set eth0 name eth0.101; ip link set dev eth0.101 up; dhclient -r eth0.101; dhclient eth0.101"
-    bullseye_vlan.vm.provision "shell",
-      inline: "apt-get update && apt-get -y install python3-pip curl && python3 -m pip install ansible"
-    bullseye_vlan.vm.provision "ansible" do |a|
+    bookworm_vlan.vm.provision "shell",
+      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y upgrade && apt-get -y install python3-pip curl && rm -rf /usr/lib/python3.11/EXTERNALLY-MANAGED && python3 -m pip install ansible" 
+    bookworm_vlan.vm.provision "ansible" do |a|
       a.verbose = "v"
       a.limit = "all"
       a.playbook = "testing/being_tested.yml"

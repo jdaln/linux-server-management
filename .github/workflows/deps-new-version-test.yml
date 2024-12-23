@@ -24,7 +24,11 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
           sudo apt-get update
           sudo apt-get install -y virtualbox virtualbox-dkms vagrant python3-pip
-          vagrant plugin install vagrant-vbguest
+          #### patch until fix https://github.com/hashicorp/vagrant/issues/13404#issuecomment-2490437792
+          git clone https://github.com/dheerapat/vagrant-vbguest.git && cd vagrant-vbguest
+          gem build vagrant-vbguest.gemspec
+          vagrant plugin install vagrant-vbguest-0.32.1.gem
+          #####
           vagrant plugin install vagrant-disksize
 
       - name: Install requirements for Python and Ansible
