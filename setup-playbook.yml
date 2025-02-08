@@ -11,6 +11,7 @@
           become: true
       vars:
         users_add_userlist: "{{ SSH_USERLIST }}"
+      when: MANAGE_USERS is not defined or MANAGE_USERS | bool # do not run if defined and set to false
 
     - name: Ensure role directory for konstruktoid.hardening does not exist
       ansible.builtin.file:
@@ -43,16 +44,55 @@
         automatic_updates: "{{ AUTO_UPDATES_OPTIONS }}"
         logind: "{{ LOGIND_HARDENING }}"
         auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
-        manage_ufw: "{{ MANAGE_UFW }}"
         ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
         disable_wireless: "{{ DISABLE_WIRELESS }}"
+        disable_apport: true
+        disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"
         reboot_ubuntu: "{{ REBOOT_UBUNTU }}"
         session_timeout: "{{ SESSION_TIMEOUT | default(900) }}"
+        manage_users: "{{ MANAGE_USERS }}"
         sshd_admin_net: "{{ SSHD_ADMIN_NET }}"
         sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"
         sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"
         sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME }}"
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES }}"
-        suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS }}"
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"
         sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(600) }}"
+        manage_ssh: "{{ MANAGE_SSH | default(true) }}"
+        manage_ufw: "{{ MANAGE_UFW }}"
+        manage_motdnews: "{{ MANAGE_MOTDNEWS | default(true) }}"
+        manage_kernel: "{{ MANAGE_KERNEL | default(true) }}"
+        manage_kernel_modules: "{{ MANAGE_KERNEL_MODULES | default(true) }}"
+        manage_systemd: "{{ MANAGE_SYSTEMD | default(true) }}"
+        manage_faillock: "{{ MANAGE_FAILLOCK | default(true) }}"
+        manage_fstab: "{{ MANAGE_FSTAB | default(true) }}"
+        manage_mounts: "{{ MANAGE_MOUNTS | default(true) }}"
+        manage_pam: "{{ MANAGE_PAM | default(true) }}"
+        manage_pwquality: "{{ MANAGE_PWQUALITY | default(true) }}"
+        manage_postfix: "{{ MANAGE_POSTFIX | default(true) }}"
+        manage_netplan: "{{ MANAGE_NETPLAN | default(true) }}"
+        manage_resolved: "{{ MANAGE_RESOLVED | default(true) }}"
+        manage_hosts: "{{ MANAGE_HOSTS | default(true) }}"
+        manage_issue: "{{ MANAGE_ISSUE | default(true) }}"
+        manage_logind: "{{ MANAGE_LOGIND | default(true) }}"
+        manage_suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS | default(true) }}"
+        manage_path: "{{ MANAGE_PATH | default(true) }}"
+        # MANDATORY_PACKAGES will keep the packages defined in a list
+        packages_blocklist: "{{
+          lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ansible/roles/konstruktoid.hardening/defaults/main/packages.yml')
+          | from_yaml
+          | combine({'packages_blocklist': []})
+          | dict2items
+          | selectattr('key', 'eq', 'packages_blocklist')
+          | map(attribute='value')
+          | first
+          | difference((MANDATORY_PACKAGES | default([])))
+          }}"
+
+    - name: Run extra commands if POST_RUN_EXTRA_COMMANDS is defined and not empty
+      ansible.builtin.shell: |
+        {{ POST_RUN_EXTRA_COMMANDS }}
+      args:
+        executable: /bin/bash
+      when: POST_RUN_EXTRA_COMMANDS is defined and POST_RUN_EXTRA_COMMANDS | trim != ""
+      changed_when: false  # Prevent task from reporting "changed"

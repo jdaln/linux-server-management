@@ -1,0 +1,44 @@
+---
+- name: Checkout and configure konstruktoid.docker_rootless
+  hosts: all
+  any_errors_fatal: true
+  tasks:
+
+    - name: Ensure role directory for konstruktoid.docker_rootless does not exist
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
+        state: absent
+      delegate_to: localhost
+      run_once: true
+
+    - name: Create the empty directory
+      ansible.builtin.file:
+        path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Clone hardening repository
+      ansible.builtin.git:
+        repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
+        dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
+        version: 'v0.58.0'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Include the hardening role
+      ansible.builtin.include_role:
+        name: konstruktoid.docker_rootless
+      vars:
+        # noqa: var-naming[no-role-prefix]
+        docker_allow_privileged_ports: "{{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"
+        docker_compose: "{{ DOCKER_COMPOSE | default(false) }}"
+        docker_compose_arch: "{{ DOCKER_COMPOSE_ARCH | default('x86_64') }}"
+        docker_rootful_enabled: "{{ DOCKER_ROOTFUL_ENABLED | default(false) }}"
+        docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"
+        docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"
+        docker_service_restart: "{{ DOCKER_SERVICE_RESTART | default(true) }}"
+        docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"
+        docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"
+        docker_user: "{{ DOCKER_USER | default('dockeruser') }}"
