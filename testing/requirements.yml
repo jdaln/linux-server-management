@@ -1,6 +1,6 @@
 ---
 roles:
   - name: konstruktoid.hardening
-    version: 'v3.0.0'
+    version: 'v3.1.0'
     src: https://github.com/konstruktoid/ansible-role-hardening.git
     scm: git
