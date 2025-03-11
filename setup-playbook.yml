@@ -32,7 +32,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-hardening.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
-        version: 'v3.0.0'
+        version: 'v3.1.0'
       delegate_to: localhost
       run_once: true
 
