@@ -35,7 +35,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           ansible-galaxy install -r requirements.yml
-          ansible-galaxy install -r testing/requirements.yml
+          ansible-galaxy install --no-deps -r testing/requirements.yml
 
       - name: Cache Python packages
         uses: actions/cache@v4

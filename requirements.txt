@@ -1,4 +1,4 @@
-ansible>=2.18
+ansible
 ansible-lint
 passlib
 jmespath
