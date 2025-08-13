@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         # Checks out the repository code for use in actions, ensuring actions can interact with repository content
 
       - name: Install Dependencies for this to run
@@ -87,7 +87,7 @@ jobs:
     if: success() && contains(github.event.pull_request.title, 'dependency konstruktoid.hardening')
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.ref }}
