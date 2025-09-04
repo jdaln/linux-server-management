@@ -1,98 +1,302 @@
 ---
-- name: Checkout and configure konstruktoid.hardening
+#
+# Linux Server Management - Main Setup Playbook
+#
+# This playbook performs comprehensive server setup and hardening by:
+# 1. Creating user accounts with SSH key management
+# 2. Applying CIS-based security hardening via konstruktoid.hardening
+# 3. Configuring system security policies and access controls
+#
+# Requirements:
+#   - Target systems: Ubuntu 20.04+, Debian 10+
+#   - Ansible 2.9+
+#   - Internet connectivity (for downloading hardening role)
+#   - SSH key access to target hosts
+#   - Variables defined in group_vars or host_vars
+#
+# Required Variables:
+#   - SSH_USERLIST: List of users to create (see group_vars examples)
+#   - AUDITD_ACTION_MAIL_ACCT: Email address for audit alerts
+#   - MANAGE_UFW: Enable/disable UFW firewall management (true/false)
+#   - UFW_OUTGOING_TRAFFIC: List of allowed outbound traffic rules
+#   - REBOOT_UBUNTU: Allow automatic reboots for updates (true/false)
+#   - SSHD_ADMIN_NET: List of networks allowed for SSH admin access
+#
+# Optional Variables:
+#   - MANAGE_USERS: Enable/disable user management (default: true)
+#   - Various other hardening options (see variable definitions below)
+#
+# Usage:
+#   ansible-playbook -i inventory setup-playbook.yml
+#   ansible-playbook -i inventory setup-playbook.yml --tags users
+#   ansible-playbook -i inventory setup-playbook.yml --skip-tags hardening
+#
+# Based on: https://github.com/konstruktoid/ansible-role-hardening
+# Licensed under: Apache License 2.0
+#
+
+- name: Linux Server Setup and Hardening
   hosts: all
   any_errors_fatal: true
-  tasks:
+  
+  # Pre-flight checks to ensure required variables are defined
+  pre_tasks:
+    - name: Validate required variables are defined
+      ansible.builtin.assert:
+        that:
+          - SSH_USERLIST is defined
+          - SSH_USERLIST | length > 0
+          - AUDITD_ACTION_MAIL_ACCT is defined
+          - AUDITD_ACTION_MAIL_ACCT | length > 0
+          - MANAGE_UFW is defined
+          - MANAGE_UFW | type_debug == "bool"
+          - UFW_OUTGOING_TRAFFIC is defined
+          - UFW_OUTGOING_TRAFFIC | length > 0
+          - AUTO_UPDATES_OPTIONS.reboot is defined
+          - AUTO_UPDATES_OPTIONS.reboot | type_debug == "bool"
+          - SSHD_ADMIN_NET is defined
+          - SSHD_ADMIN_NET | length > 0
+        fail_msg: |
+          Missing required variables. Please ensure all mandatory variables are defined:
+          - SSH_USERLIST: List of users to create
+          - AUDITD_ACTION_MAIL_ACCT: Email address for audit alerts
+          - MANAGE_UFW: Enable/disable UFW firewall management (true/false)
+          - UFW_OUTGOING_TRAFFIC: List of allowed outbound traffic rules
+          - AUTO_UPDATES_OPTIONS.reboot: Allow automatic reboots for updates (true/false)
+          - SSHD_ADMIN_NET: List of networks allowed for SSH admin access
+        success_msg: "All required variables validation passed"
+      tags: [validation, always]
 
-    - name: Add users
+    - name: Display playbook execution information
+      ansible.builtin.debug:
+        msg:
+          - "Target host: {{ inventory_hostname }}"
+          - "Environment: {{ environment | default('undefined') }}"
+          - "User management: {{ MANAGE_USERS | default(true) }}"
+          - "Number of users to create: {{ SSH_USERLIST | length }}"
+      tags: [info, always]
+
+  tasks:
+    # ===================================================================
+    # USER MANAGEMENT SECTION
+    # Create user accounts with SSH keys and sudo permissions
+    # ===================================================================
+    
+    - name: Create user accounts with SSH key management
       ansible.builtin.include_role:
         name: users_add
         apply:
           become: true
       vars:
         users_add_userlist: "{{ SSH_USERLIST }}"
-      when: MANAGE_USERS is not defined or MANAGE_USERS | bool # do not run if defined and set to false
+      when: MANAGE_USERS is not defined or MANAGE_USERS | bool
+      tags: [users, user-management]
 
-    - name: Ensure role directory for konstruktoid.hardening does not exist
+    - name: Execute pending handlers after user creation
+      ansible.builtin.meta: flush_handlers
+      tags: [users, user-management, handlers]
+
+    # ===================================================================
+    # HARDENING ROLE PREPARATION SECTION
+    # Download and prepare the konstruktoid.hardening role
+    # ===================================================================
+
+    - name: Clean existing hardening role directory
       ansible.builtin.file:
         path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
         state: absent
       delegate_to: localhost
       run_once: true
+      tags: [hardening, setup, role-download]
 
-    - name: Create the empty directory
+    - name: Create fresh directory for hardening role
       ansible.builtin.file:
         path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
         state: directory
         mode: '0755'
       delegate_to: localhost
       run_once: true
+      tags: [hardening, setup, role-download]
 
-    - name: Clone hardening repository
+    - name: Download konstruktoid.hardening role from GitHub
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-hardening.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
-        version: 'v4.0.1'
+        version: 'v4.0.1'  # Pinned version for reproducibility
       delegate_to: localhost
       run_once: true
+      tags: [hardening, setup, role-download]
 
-    - name: Include the hardening role
+    # ===================================================================
+    # SYSTEM HARDENING SECTION
+    # Apply CIS-based security hardening configurations
+    # ===================================================================
+    
+    - name: Apply CIS-based system hardening via konstruktoid.hardening
       ansible.builtin.include_role:
         name: konstruktoid.hardening
       vars:
+        # Suppress ansible-lint var-naming warning for third-party role variables
         # noqa: var-naming[no-role-prefix]
-        automatic_updates: "{{ AUTO_UPDATES_OPTIONS }}"
-        logind: "{{ LOGIND_HARDENING }}"
-        auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
-        ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
-        disable_wireless: "{{ DISABLE_WIRELESS }}"
-        disable_apport: true
-        disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"
-        reboot_ubuntu: "{{ REBOOT_UBUNTU }}"
-        session_timeout: "{{ SESSION_TIMEOUT | default(900) }}"
-        manage_users: "{{ MANAGE_USERS }}"
-        sshd_admin_net: "{{ SSHD_ADMIN_NET }}"
-        sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"
-        sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"
-        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME }}"
-        sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES }}"
-        sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"
-        sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(600) }}"
-        manage_ssh: "{{ MANAGE_SSH | default(true) }}"
-        manage_ufw: "{{ MANAGE_UFW }}"
-        manage_motdnews: "{{ MANAGE_MOTDNEWS | default(true) }}"
-        manage_kernel: "{{ MANAGE_KERNEL | default(true) }}"
-        manage_kernel_modules: "{{ MANAGE_KERNEL_MODULES | default(true) }}"
-        manage_systemd: "{{ MANAGE_SYSTEMD | default(true) }}"
-        manage_faillock: "{{ MANAGE_FAILLOCK | default(true) }}"
-        manage_fstab: "{{ MANAGE_FSTAB | default(true) }}"
-        manage_mounts: "{{ MANAGE_MOUNTS | default(true) }}"
-        manage_pam: "{{ MANAGE_PAM | default(true) }}"
-        manage_pwquality: "{{ MANAGE_PWQUALITY | default(true) }}"
-        manage_postfix: "{{ MANAGE_POSTFIX | default(true) }}"
-        manage_netplan: "{{ MANAGE_NETPLAN | default(true) }}"
-        manage_resolved: "{{ MANAGE_RESOLVED | default(true) }}"
-        manage_hosts: "{{ MANAGE_HOSTS | default(true) }}"
-        manage_issue: "{{ MANAGE_ISSUE | default(true) }}"
-        manage_logind: "{{ MANAGE_LOGIND | default(true) }}"
-        manage_suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS | default(true) }}"
-        manage_path: "{{ MANAGE_PATH | default(true) }}"
-        # MANDATORY_PACKAGES will keep the packages defined in a list
+        
+        # === SYSTEM UPDATE CONFIGURATION ===
+        # Modern automatic updates configuration (replaces old reboot_ubuntu)
+        automatic_updates:
+          enabled: "{{ AUTO_UPDATES_OPTIONS.enabled | default(true) }}"
+          only_security: "{{ AUTO_UPDATES_OPTIONS.only_security | default(true) }}"
+          reboot: "{{ AUTO_UPDATES_OPTIONS.reboot | default(true) }}"
+          reboot_from_time: "{{ AUTO_UPDATES_OPTIONS.reboot_from_time | default('2:00') }}"
+          reboot_time_margin_mins: "{{ AUTO_UPDATES_OPTIONS.reboot_time_margin_mins | default(20) }}"
+          custom_origins:  "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
+        
+        # === LOGIN AND SESSION MANAGEMENT ===
+        logind: "{{ LOGIND_HARDENING }}"                # Configure systemd-logind settings
+        session_timeout: "{{ SESSION_TIMEOUT | default(900) }}"  # Session timeout in seconds (15 min default)
+        
+        # === AUDIT AND LOGGING ===
+        auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"  # Email for audit alerts
+        
+        # === NETWORK AND FIREWALL ===
+        ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"        # UFW outbound traffic policy
+        manage_ufw: "{{ MANAGE_UFW }}"                            # Enable/disable UFW management
+        disable_wireless: "{{ DISABLE_WIRELESS | default(true) }}"               # Disable wireless interfaces
+        
+        # === SSH CONFIGURATION ===
+        manage_ssh: "{{ MANAGE_SSH | default(true) }}"                               # Enable SSH hardening
+        sshd_admin_net: "{{ SSHD_ADMIN_NET }}"                                      # Networks allowed for SSH admin access
+        sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"   # Users allowed SSH access
+        sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"  # Groups allowed SSH access
+        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME | default(60)}}"                        # SSH login grace period
+        sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES | default(3) }}"                            # Maximum SSH auth attempts
+        sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"  # Allow SSH port forwarding
+        sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(300) }}"        # SSH client timeout (5 min default)
+        
+        # === SYSTEM SECURITY ===
+        disable_apport: true                                      # Disable Ubuntu crash reporting
+        disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"  # Disable root login
+        manage_users: "{{ MANAGE_USERS }}"                       # Enable user account management
+        manage_packages: true                                     # Enable package management (removal/installation)
+        
+        # === SYSTEM COMPONENT MANAGEMENT ===
+        # Each option controls whether the hardening role manages specific system components
+        manage_motdnews: "{{ MANAGE_MOTDNEWS | default(true) }}"              # Message of the day
+        manage_kernel: "{{ MANAGE_KERNEL | default(true) }}"                  # Kernel parameters
+        manage_kernel_modules: "{{ MANAGE_KERNEL_MODULES | default(true) }}"  # Kernel module blacklisting
+        manage_systemd: "{{ MANAGE_SYSTEMD | default(true) }}"                # Systemd service hardening
+        manage_faillock: "{{ MANAGE_FAILLOCK | default(true) }}"              # Account lockout policies
+        manage_fstab: "{{ MANAGE_FSTAB | default(true) }}"                    # Filesystem mount options
+        manage_mounts: "{{ MANAGE_MOUNTS | default(true) }}"                  # Mount point security
+        manage_pam: "{{ MANAGE_PAM | default(true) }}"                        # PAM configuration
+        manage_pwquality: "{{ MANAGE_PWQUALITY | default(true) }}"            # Password quality rules
+        manage_postfix: "{{ MANAGE_POSTFIX | default(true) }}"                # Mail server configuration
+        manage_netplan: "{{ MANAGE_NETPLAN | default(true) }}"                # Network configuration
+        manage_resolved: "{{ MANAGE_RESOLVED | default(true) }}"              # DNS resolver configuration
+        manage_hosts: "{{ MANAGE_HOSTS | default(true) }}"                    # Hosts file management
+        manage_issue: "{{ MANAGE_ISSUE | default(true) }}"                    # Login banner configuration
+        manage_logind: "{{ MANAGE_LOGIND | default(true) }}"                  # Login manager configuration
+        manage_suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS | default(true) }}"  # SUID/SGID file permissions
+        manage_path: "{{ MANAGE_PATH | default(true) }}"                      # PATH environment variable security
+        
+        # === PACKAGE MANAGEMENT ===
+        # Dynamically generate packages blocklist excluding mandatory packages
         packages_blocklist: "{{
-          lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ansible/roles/konstruktoid.hardening/defaults/main/packages.yml')
-          | from_yaml
-          | combine({'packages_blocklist': []})
-          | dict2items
-          | selectattr('key', 'eq', 'packages_blocklist')
-          | map(attribute='value')
-          | first
+          (lookup('ansible.builtin.file', lookup('env', 'HOME') + '/.ansible/roles/konstruktoid.hardening/defaults/main.yml')
+          | from_yaml)['packages_blocklist']
           | difference((MANDATORY_PACKAGES | default([])))
           }}"
+        # temp: coming upstream renaming. Change the name permanently once 
+        # https://github.com/konstruktoid/ansible-role-hardening/pull/981 is merged
+        blocked_installed_packages: "{{ packages_blocklist }}"
+      tags: [hardening, security, cis-hardening]
 
-    - name: Run extra commands if POST_RUN_EXTRA_COMMANDS is defined and not empty
+    # ===================================================================
+    # TEMPRORARY DEBUG PART
+    # Will be removed once https://github.com/konstruktoid/ansible-role-hardening/pull/979 is resolved and release is made
+    # ===================================================================
+
+    - name: Check if unattended-upgrades service exists and is enabled
+      ansible.builtin.systemd:
+        name: unattended-upgrades
+      register: unattended_upgrades_status
+      failed_when: false
+      become: true
+
+    - name: Restart unattended-upgrades to apply configuration changes
+      ansible.builtin.systemd_service:
+        name: unattended-upgrades
+        state: restarted
+        enabled: true
+      when:
+        - ansible_facts.virtualization_type not in ["container", "docker", "podman"]
+        - unattended_upgrades_status.status is defined
+        - unattended_upgrades_status.status.LoadState == "loaded"
+        - unattended_upgrades_status.status.UnitFileState in ["enabled", "enabled-runtime"]
+      become: true
+
+    # ===================================================================
+    # POST-CONFIGURATION SECTION
+    # Run any additional custom commands if specified
+    # ===================================================================
+    
+    - name: Execute custom post-configuration commands
       ansible.builtin.shell: |
         {{ POST_RUN_EXTRA_COMMANDS }}
       args:
         executable: /bin/bash
+      become: true
       when: POST_RUN_EXTRA_COMMANDS is defined and POST_RUN_EXTRA_COMMANDS | trim != ""
-      changed_when: false  # Prevent task from reporting "changed"
+      changed_when: false  # Prevent task from always reporting "changed"
+      tags: [post-config, custom-commands]
+
+    - name: Create PAM MOTD configuration for Debian (erased by hardening manage_pam config template)
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/sshd
+        line: "session optional pam_motd.so motd=/var/cache/motd-security-status"
+        insertafter: "# Print the message of the day upon successful login"
+        state: present
+      become: true
+      when: ansible_distribution == "Debian"
+
+  # Post-execution validation and reporting
+  post_tasks:
+    - name: Verify SSH service is running and enabled
+      ansible.builtin.systemd:
+        name: ssh
+        state: started
+        enabled: true
+      check_mode: true
+      register: ssh_status
+      failed_when: false
+      tags: [validation, post-check]
+
+    - name: Verify UFW firewall status (if managed)
+      ansible.builtin.command: ufw status
+      register: ufw_status
+      when: MANAGE_UFW | default(false)
+      changed_when: false
+      failed_when: false
+      become: true
+      tags: [validation, post-check]
+
+    - name: Display setup completion summary
+      ansible.builtin.debug:
+        msg:
+          - "===== SETUP COMPLETION SUMMARY ====="
+          - "Host: {{ inventory_hostname }}"
+          - "Users validated via this playbook: {{ SSH_USERLIST | length }}"
+          - "Hardening applied: {{ 'Yes' if (MANAGE_UFW | default(false)) else 'Partial' }}"
+          - "SSH service status: {{ 'Running' if ssh_status.status.ActiveState == 'active' else 'Check required' }}"
+          - "UFW status: {{ ufw_status.stdout.split('\n')[0] if (MANAGE_UFW | default(false) and ufw_status is defined) else 'Not managed' }}"
+          - "====================================="
+      tags: [info, summary]
+
+    - name: Reminder about next steps
+      ansible.builtin.debug:
+        msg:
+          - "IMPORTANT NEXT STEPS:"
+          - "1. Test SSH connectivity with new user accounts"
+          - "2. Verify sudo access for admin users"
+          - "3. Review firewall rules if UFW was configured"
+          - "4. Check system logs for any errors: journalctl -xe"
+          - "5. Consider rebooting to ensure all changes take effect"
+      tags: [info, reminder]

@@ -30,6 +30,7 @@ AUTO_UPDATES_OPTIONS:
   reboot: true
   reboot_from_time: "2:00"
   reboot_time_margin_mins: "20" # Random interval for reboot to avoid overloading hypervisors
+  custom_origins: ''
 LOGIND_HARDENING:
   killuserprocesses: true
   killexcludeusers:

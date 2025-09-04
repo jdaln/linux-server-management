@@ -1,44 +1,184 @@
 ---
-- name: Checkout and configure konstruktoid.docker_rootless
+#
+# Docker Rootless Installation Playbook
+#
+# This playbook installs Docker in rootless mode for enhanced security by:
+# 1. Downloading the konstruktoid.docker_rootless role from GitHub
+# 2. Configuring rootless Docker daemon for non-privileged operation
+# 3. Setting up user namespaces and security contexts
+# 4. Enabling Docker services for specified users without root privileges
+#
+# Requirements:
+#   - Target systems: Ubuntu 20.04+, Debian 10+
+#   - Ansible 2.9+
+#   - Internet connectivity (for downloading Docker and role)
+#   - User account already created (run setup-playbook.yml first)
+#   - Sufficient user namespace support in kernel
+#
+# Security Benefits of Rootless Docker:
+#   - Docker daemon runs without root privileges
+#   - Containers cannot escalate to root on host
+#   - Reduced attack surface for container breakouts
+#   - Better isolation between containers and host
+#
+# Required Variables:
+#   - DOCKER_USER: Username for Docker installation (default: dockeruser)
+#   - Various Docker configuration options (see defaults below)
+#
+# Usage:
+#   ansible-playbook -i inventory install-docker-rootless.yml
+#   ansible-playbook -i inventory install-docker-rootless.yml --tags docker-setup
+#   ansible-playbook -i inventory install-docker-rootless.yml -e DOCKER_USER=myuser
+#
+# Based on: https://github.com/konstruktoid/ansible-role-docker-rootless
+# Licensed under: Apache License 2.0
+#
+
+- name: Install Docker in Rootless Mode
   hosts: all
   any_errors_fatal: true
-  tasks:
+  
+  # Pre-flight checks to ensure system compatibility
+  pre_tasks:
+    - name: Validate kernel support for user namespaces
+      ansible.builtin.shell: |
+        if [ -f /proc/sys/user/max_user_namespaces ]; then
+          max_ns=$(cat /proc/sys/user/max_user_namespaces)
+          if [ "$max_ns" -gt 0 ]; then
+            echo "User namespaces supported (max: $max_ns)"
+          else
+            echo "User namespaces disabled"
+            exit 1
+          fi
+        else
+          echo "User namespace support unknown"
+        fi
+      register: namespace_check
+      changed_when: false
+      failed_when: namespace_check.rc != 0
+      tags: [validation, always]
 
-    - name: Ensure role directory for konstruktoid.docker_rootless does not exist
+    - name: Display Docker installation information
+      ansible.builtin.debug:
+        msg:
+          - "Target host: {{ inventory_hostname }}"
+          - "Docker user: {{ DOCKER_USER | default('dockeruser') }}"
+          - "Rootless mode: Enabled"
+          - "Compose installation: {{ DOCKER_COMPOSE | default(false) }}"
+          - "Privileged ports: {{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"
+      tags: [info, always]
+
+  tasks:
+    # ===================================================================
+    # DOCKER ROOTLESS ROLE PREPARATION SECTION
+    # Download and prepare the konstruktoid.docker_rootless role
+    # ===================================================================
+
+    - name: Clean existing Docker rootless role directory
       ansible.builtin.file:
         path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
         state: absent
       delegate_to: localhost
       run_once: true
+      tags: [docker-setup, role-download]
 
-    - name: Create the empty directory
+    - name: Create fresh directory for Docker rootless role
       ansible.builtin.file:
         path: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
         state: directory
         mode: '0755'
       delegate_to: localhost
       run_once: true
+      tags: [docker-setup, role-download]
 
-    - name: Clone hardening repository
+    - name: Download konstruktoid.docker_rootless role from GitHub
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'v0.58.0'
+        version: 'v0.58.0'  # Pinned version for reproducibility
       delegate_to: localhost
       run_once: true
+      tags: [docker-setup, role-download]
 
-    - name: Include the hardening role
+    # ===================================================================
+    # DOCKER ROOTLESS INSTALLATION SECTION
+    # Install and configure Docker in rootless mode
+    # ===================================================================
+
+    - name: Install Docker in rootless mode via konstruktoid.docker_rootless
       ansible.builtin.include_role:
         name: konstruktoid.docker_rootless
       vars:
+        # Suppress ansible-lint var-naming warning for third-party role variables
         # noqa: var-naming[no-role-prefix]
-        docker_allow_privileged_ports: "{{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"
-        docker_compose: "{{ DOCKER_COMPOSE | default(false) }}"
-        docker_compose_arch: "{{ DOCKER_COMPOSE_ARCH | default('x86_64') }}"
-        docker_rootful_enabled: "{{ DOCKER_ROOTFUL_ENABLED | default(false) }}"
-        docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"
-        docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"
-        docker_service_restart: "{{ DOCKER_SERVICE_RESTART | default(true) }}"
-        docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"
-        docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"
-        docker_user: "{{ DOCKER_USER | default('dockeruser') }}"
+        
+        # === SECURITY CONFIGURATION ===
+        docker_allow_privileged_ports: "{{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"  # Allow binding to ports <1024
+        
+        # === DOCKER COMPOSE CONFIGURATION ===
+        docker_compose: "{{ DOCKER_COMPOSE | default(false) }}"               # Install Docker Compose
+        docker_compose_arch: "{{ DOCKER_COMPOSE_ARCH | default('x86_64') }}"  # Architecture for Compose download
+        
+        # === ROOTFUL DOCKER CONFIGURATION ===
+        # These options control traditional rootful Docker (usually disabled for security)
+        docker_rootful_enabled: "{{ DOCKER_ROOTFUL_ENABLED | default(false) }}"  # Enable traditional Docker daemon
+        docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"                  # Install rootful Docker alongside rootless
+        docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"        # Additional rootful Docker options
+        
+        # === SERVICE MANAGEMENT ===
+        docker_service_restart: "{{ DOCKER_SERVICE_RESTART | default(true) }}"      # Restart Docker service after installation
+        docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"  # Enable automatic Docker updates
+        
+        # === USER CONFIGURATION ===
+        docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"  # Add Docker environment to user's .bashrc
+        docker_user: "{{ DOCKER_USER | default('dockeruser') }}"        # Username for Docker installation
+      tags: [docker-installation, docker-config]
+
+  # Post-installation validation and information
+  post_tasks:
+    - name: Verify Docker rootless installation
+      ansible.builtin.command: |
+        sudo -u {{ DOCKER_USER | default('dockeruser') }} docker version
+      register: docker_version_check
+      changed_when: false
+      failed_when: false
+      tags: [validation, post-check]
+
+    - name: Check Docker daemon status for user
+      ansible.builtin.command: |
+        sudo -u {{ DOCKER_USER | default('dockeruser') }} systemctl --user is-active docker
+      register: docker_service_check
+      changed_when: false
+      failed_when: false
+      tags: [validation, post-check]
+
+    - name: Display Docker installation summary
+      ansible.builtin.debug:
+        msg:
+          - "===== DOCKER ROOTLESS INSTALLATION SUMMARY ====="
+          - "Host: {{ inventory_hostname }}"
+          - "Docker user: {{ DOCKER_USER | default('dockeruser') }}"
+          - "Docker version: {{ docker_version_check.stdout.split('\n')[1] if docker_version_check.rc == 0 else 'Check failed' }}"
+          - "Service status: {{ docker_service_check.stdout if docker_service_check.rc == 0 else 'Check failed' }}"
+          - "Rootless mode: Enabled"
+          - "Compose installed: {{ DOCKER_COMPOSE | default(false) }}"
+          - "=================================================="
+      tags: [info, summary, always]
+
+    - name: Display Docker usage instructions
+      ansible.builtin.debug:
+        msg:
+          - "DOCKER USAGE INSTRUCTIONS:"
+          - "1. Switch to Docker user: sudo -u {{ DOCKER_USER | default('dockeruser') }} -i"
+          - "2. Start Docker daemon: systemctl --user start docker"
+          - "3. Test Docker: docker run hello-world"
+          - "4. For automatic startup: loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
+          - "5. Docker socket: /run/user/$(id -u)/docker.sock"
+          - "6. Docker data: ~/.local/share/docker/"
+          - ""
+          - "SECURITY NOTES:"
+          - "- Docker daemon runs without root privileges"
+          - "- Containers cannot access host root filesystem"
+          - "- Limited to user's file permissions and capabilities"
+          - "- Network namespace isolation provides additional security"
+      tags: [info, instructions, always]
