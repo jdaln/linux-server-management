@@ -1,10 +1,10 @@
 {
-    "extends": [
-      "config:recommended"
-    ],
-    "ansible-galaxy": {
-      "fileMatch": [
-        "(^|/)testing/requirements\\.ya?ml$"
-      ]
-    }
+  "extends": [
+    "config:recommended"
+  ],
+  "ansible-galaxy": {
+    "managerFilePatterns": [
+      "/(^|/)testing/requirements\\.ya?ml$/"
+    ]
   }
+}
