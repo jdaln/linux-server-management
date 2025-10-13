@@ -229,6 +229,10 @@ This project is licensed under the Apache License, Version 2.0. See the [LICENSE
 
 Testing, Automation and Vagrant script portions based on work by Thomas Sjögren (2020-2024) from https://github.com/konstruktoid/ansible-role-hardening.
 
+## Acknowledgements
+
+This project and part of its upstream contributions have received funding from the IMI 2 Joint Undertaking (JU) under grant agreement No. 101034344 and the Horizon Europe R&I program through the EBRAINS2.0 project specifically supported by the Swiss State Secretariat for Education, Research and Innovation (SERI) under contract number 23.00638.
+
 ## Support
 
 For issues and questions:
