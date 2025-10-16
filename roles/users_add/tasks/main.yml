@@ -307,13 +307,22 @@
       failed_when: false
       changed_when: false
 
+    - name: Ensure PAM MOTD configuration for Ubuntu
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/sshd
+        line: "session optional pam_motd.so motd=/run/motd.dynamic"
+        insertafter: "# Print the message of the day upon successful login"
+        state: present
+      when: ansible_distribution == "Ubuntu" and update_motd_exists.rc != 0
+
     - name: Create PAM MOTD configuration for Debian
       ansible.builtin.lineinfile:
         path: /etc/pam.d/sshd
         line: "session optional pam_motd.so motd=/var/cache/motd-security-status"
         insertafter: "# Print the message of the day upon successful login"
         state: present
-      when: update_motd_exists.rc != 0
+      become: true
+      when: ansible_distribution == "Debian" and update_motd_exists.rc != 0
 
     - name: Generate initial security status and dynamic MOTD
       ansible.builtin.shell: /usr/local/bin/update-security-status
@@ -329,4 +338,5 @@
         state: touch
       when: update_motd_exists.rc != 0
 
-  when: ansible_distribution == "Debian"
+  when: ansible_os_family == "Debian"
+

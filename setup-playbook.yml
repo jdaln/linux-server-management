@@ -248,14 +248,14 @@
       changed_when: false  # Prevent task from always reporting "changed"
       tags: [post-config, custom-commands]
 
-    - name: Create PAM MOTD configuration for Debian (erased by hardening manage_pam config template)
+    - name: Create PAM MOTD configuration for Debian-family (erased by hardening manage_pam config template)
       ansible.builtin.lineinfile:
         path: /etc/pam.d/sshd
         line: "session optional pam_motd.so motd=/var/cache/motd-security-status"
         insertafter: "# Print the message of the day upon successful login"
         state: present
       become: true
-      when: ansible_distribution == "Debian"
+      when: ansible_os_family == "Debian"
 
   # Post-execution validation and reporting
   post_tasks:
