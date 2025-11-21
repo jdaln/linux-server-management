@@ -1,5 +1,5 @@
 - name: Force password change on first login
   ansible.builtin.command: "chage -d 0 {{ item.username }}"
   loop: "{{ users_add_userlist | default([]) }}"
-  register: chage_output  # This will register the output of the command to a variable
-  changed_when: "'Password aging updated' in chage_output.stdout"
+  register: users_add_chage_output  # This will register the output of the command to a variable
+  changed_when: "'Password aging updated' in users_add_chage_output.stdout"
