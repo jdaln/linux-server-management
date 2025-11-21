@@ -299,11 +299,12 @@
     state: started
     daemon_reload: true
 
-- name: Setup MOTD for Debian systems (different from Ubuntu)
+- name: Setup MOTD for Debian systems
+  when: ansible_os_family == "Debian"
   block:
     - name: Check if this is a Debian-based system without update-motd
       ansible.builtin.command: which update-motd
-      register: update_motd_exists
+      register: users_add_update_motd_exists
       failed_when: false
       changed_when: false
 
@@ -313,7 +314,7 @@
         line: "session optional pam_motd.so motd=/run/motd.dynamic"
         insertafter: "# Print the message of the day upon successful login"
         state: present
-      when: ansible_distribution == "Ubuntu" and update_motd_exists.rc != 0
+      when: ansible_distribution == "Ubuntu" and users_add_update_motd_exists.rc != 0
 
     - name: Create PAM MOTD configuration for Debian
       ansible.builtin.lineinfile:
@@ -322,11 +323,11 @@
         insertafter: "# Print the message of the day upon successful login"
         state: present
       become: true
-      when: ansible_distribution == "Debian" and update_motd_exists.rc != 0
+      when: ansible_distribution == "Debian" and users_add_update_motd_exists.rc != 0
 
     - name: Generate initial security status and dynamic MOTD
-      ansible.builtin.shell: /usr/local/bin/update-security-status
-      when: update_motd_exists.rc != 0
+      ansible.builtin.command: /usr/local/bin/update-security-status
+      when: users_add_update_motd_exists.rc != 0
       changed_when: false
 
     - name: Ensure cache file permissions
@@ -336,7 +337,4 @@
         group: root
         mode: '0644'
         state: touch
-      when: update_motd_exists.rc != 0
-
-  when: ansible_os_family == "Debian"
-
+      when: users_add_update_motd_exists.rc != 0
