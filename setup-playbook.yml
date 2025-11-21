@@ -147,7 +147,7 @@
           reboot: "{{ AUTO_UPDATES_OPTIONS.reboot | default(true) }}"
           reboot_from_time: "{{ AUTO_UPDATES_OPTIONS.reboot_from_time | default('2:00') }}"
           reboot_time_margin_mins: "{{ AUTO_UPDATES_OPTIONS.reboot_time_margin_mins | default(20) }}"
-          custom_origins:  "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
+          custom_origins: "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
         
         # === LOGIN AND SESSION MANAGEMENT ===
         logind: "{{ LOGIND_HARDENING }}"                # Configure systemd-logind settings
@@ -166,7 +166,7 @@
         sshd_admin_net: "{{ SSHD_ADMIN_NET }}"                                      # Networks allowed for SSH admin access
         sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"   # Users allowed SSH access
         sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"  # Groups allowed SSH access
-        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME | default(60)}}"                        # SSH login grace period
+        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME | default(60) }}"                        # SSH login grace period
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES | default(3) }}"                            # Maximum SSH auth attempts
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"  # Allow SSH port forwarding
         sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(300) }}"        # SSH client timeout (5 min default)
