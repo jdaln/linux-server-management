@@ -122,7 +122,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-hardening.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
-        version: 'v4.0.1'  # Pinned version for reproducibility
+        version: 'v4.2.0'  # Pinned version for reproducibility
       delegate_to: localhost
       run_once: true
       tags: [hardening, setup, role-download]
