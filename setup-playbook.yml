@@ -38,7 +38,7 @@
 - name: Linux Server Setup and Hardening
   hosts: all
   any_errors_fatal: true
-  
+
   # Pre-flight checks to ensure required variables are defined
   pre_tasks:
     - name: Validate required variables are defined
@@ -81,7 +81,7 @@
     # USER MANAGEMENT SECTION
     # Create user accounts with SSH keys and sudo permissions
     # ===================================================================
-    
+
     - name: Create user accounts with SSH key management
       ansible.builtin.include_role:
         name: users_add
@@ -131,14 +131,14 @@
     # SYSTEM HARDENING SECTION
     # Apply CIS-based security hardening configurations
     # ===================================================================
-    
+
     - name: Apply CIS-based system hardening via konstruktoid.hardening
       ansible.builtin.include_role:
         name: konstruktoid.hardening
       vars:
         # Suppress ansible-lint var-naming warning for third-party role variables
         # noqa: var-naming[no-role-prefix]
-        
+
         # === SYSTEM UPDATE CONFIGURATION ===
         # Modern automatic updates configuration (replaces old reboot_ubuntu)
         automatic_updates:
@@ -147,36 +147,36 @@
           reboot: "{{ AUTO_UPDATES_OPTIONS.reboot | default(true) }}"
           reboot_from_time: "{{ AUTO_UPDATES_OPTIONS.reboot_from_time | default('2:00') }}"
           reboot_time_margin_mins: "{{ AUTO_UPDATES_OPTIONS.reboot_time_margin_mins | default(20) }}"
-          custom_origins:  "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
-        
+          custom_origins: "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
+
         # === LOGIN AND SESSION MANAGEMENT ===
         logind: "{{ LOGIND_HARDENING }}"                # Configure systemd-logind settings
         session_timeout: "{{ SESSION_TIMEOUT | default(900) }}"  # Session timeout in seconds (15 min default)
-        
+
         # === AUDIT AND LOGGING ===
         auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"  # Email for audit alerts
-        
+
         # === NETWORK AND FIREWALL ===
         ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"        # UFW outbound traffic policy
         manage_ufw: "{{ MANAGE_UFW }}"                            # Enable/disable UFW management
         disable_wireless: "{{ DISABLE_WIRELESS | default(true) }}"               # Disable wireless interfaces
-        
+
         # === SSH CONFIGURATION ===
         manage_ssh: "{{ MANAGE_SSH | default(true) }}"                               # Enable SSH hardening
         sshd_admin_net: "{{ SSHD_ADMIN_NET }}"                                      # Networks allowed for SSH admin access
         sshd_allow_users: "{{ SSH_USERLIST | map(attribute='username') | list }}"   # Users allowed SSH access
         sshd_allow_groups: "{{ SSH_USERLIST | map(attribute='username') | list }}"  # Groups allowed SSH access
-        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME | default(60)}}"                        # SSH login grace period
+        sshd_login_grace_time: "{{ SSHD_LOGIN_GRACE_TIME | default(60) }}"                        # SSH login grace period
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES | default(3) }}"                            # Maximum SSH auth attempts
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"  # Allow SSH port forwarding
         sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(300) }}"        # SSH client timeout (5 min default)
-        
+
         # === SYSTEM SECURITY ===
         disable_apport: true                                      # Disable Ubuntu crash reporting
         disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"  # Disable root login
         manage_users: "{{ MANAGE_USERS }}"                       # Enable user account management
         manage_packages: true                                     # Enable package management (removal/installation)
-        
+
         # === SYSTEM COMPONENT MANAGEMENT ===
         # Each option controls whether the hardening role manages specific system components
         manage_motdnews: "{{ MANAGE_MOTDNEWS | default(true) }}"              # Message of the day
@@ -196,7 +196,7 @@
         manage_logind: "{{ MANAGE_LOGIND | default(true) }}"                  # Login manager configuration
         manage_suid_sgid_permissions: "{{ SUID_SGID_PERMISSIONS | default(true) }}"  # SUID/SGID file permissions
         manage_path: "{{ MANAGE_PATH | default(true) }}"                      # PATH environment variable security
-        
+
         # === PACKAGE MANAGEMENT ===
         # Dynamically generate packages blocklist excluding mandatory packages
         packages_blocklist: "{{
@@ -204,7 +204,7 @@
           | from_yaml)['packages_blocklist']
           | difference((MANDATORY_PACKAGES | default([])))
           }}"
-        # temp: coming upstream renaming. Change the name permanently once 
+        # temp: coming upstream renaming. Change the name permanently once
         # https://github.com/konstruktoid/ansible-role-hardening/pull/981 is merged
         blocked_installed_packages: "{{ packages_blocklist }}"
       tags: [hardening, security, cis-hardening]
@@ -237,7 +237,7 @@
     # POST-CONFIGURATION SECTION
     # Run any additional custom commands if specified
     # ===================================================================
-    
+
     - name: Execute custom post-configuration commands
       ansible.builtin.shell: |
         {{ POST_RUN_EXTRA_COMMANDS }}
@@ -248,14 +248,14 @@
       changed_when: false  # Prevent task from always reporting "changed"
       tags: [post-config, custom-commands]
 
-    - name: Create PAM MOTD configuration for Debian (erased by hardening manage_pam config template)
+    - name: Create PAM MOTD configuration for Debian-family (erased by hardening manage_pam config template)
       ansible.builtin.lineinfile:
         path: /etc/pam.d/sshd
         line: "session optional pam_motd.so motd=/var/cache/motd-security-status"
         insertafter: "# Print the message of the day upon successful login"
         state: present
       become: true
-      when: ansible_distribution == "Debian"
+      when: ansible_os_family == "Debian"
 
   # Post-execution validation and reporting
   post_tasks:

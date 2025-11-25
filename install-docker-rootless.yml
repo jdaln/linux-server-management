@@ -37,7 +37,7 @@
 - name: Install Docker in Rootless Mode
   hosts: all
   any_errors_fatal: true
-  
+
   # Pre-flight checks to ensure system compatibility
   pre_tasks:
     - name: Validate kernel support for user namespaces
@@ -111,24 +111,24 @@
       vars:
         # Suppress ansible-lint var-naming warning for third-party role variables
         # noqa: var-naming[no-role-prefix]
-        
+
         # === SECURITY CONFIGURATION ===
         docker_allow_privileged_ports: "{{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"  # Allow binding to ports <1024
-        
+
         # === DOCKER COMPOSE CONFIGURATION ===
         docker_compose: "{{ DOCKER_COMPOSE | default(false) }}"               # Install Docker Compose
         docker_compose_arch: "{{ DOCKER_COMPOSE_ARCH | default('x86_64') }}"  # Architecture for Compose download
-        
+
         # === ROOTFUL DOCKER CONFIGURATION ===
         # These options control traditional rootful Docker (usually disabled for security)
         docker_rootful_enabled: "{{ DOCKER_ROOTFUL_ENABLED | default(false) }}"  # Enable traditional Docker daemon
         docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"                  # Install rootful Docker alongside rootless
         docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"        # Additional rootful Docker options
-        
+
         # === SERVICE MANAGEMENT ===
         docker_service_restart: "{{ DOCKER_SERVICE_RESTART | default(true) }}"      # Restart Docker service after installation
         docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"  # Enable automatic Docker updates
-        
+
         # === USER CONFIGURATION ===
         docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"  # Add Docker environment to user's .bashrc
         docker_user: "{{ DOCKER_USER | default('dockeruser') }}"        # Username for Docker installation

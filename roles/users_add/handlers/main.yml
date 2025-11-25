@@ -1,3 +1,5 @@
+# Suppress ansible-lint var-naming warning for third-party role variables
+# noqa: var-naming[no-role-prefix]
 - name: Force password change on first login
   ansible.builtin.command: "chage -d 0 {{ item.username }}"
   loop: "{{ users_add_userlist | default([]) }}"
