@@ -176,6 +176,7 @@
         disable_root_account: "{{ DISABLE_ROOT_ACCOUNT | default(true) }}"  # Disable root login
         manage_users: "{{ MANAGE_USERS }}"                       # Enable user account management
         manage_packages: true                                     # Enable package management (removal/installation)
+        delete_users: ["games", "gnats", "irc", "list", "news", "sync", "uucp", "ubuntu", "debian"]
 
         # === SYSTEM COMPONENT MANAGEMENT ===
         # Each option controls whether the hardening role manages specific system components
@@ -208,30 +209,6 @@
         # https://github.com/konstruktoid/ansible-role-hardening/pull/981 is merged
         blocked_installed_packages: "{{ packages_blocklist }}"
       tags: [hardening, security, cis-hardening]
-
-    # ===================================================================
-    # TEMPRORARY DEBUG PART
-    # Will be removed once https://github.com/konstruktoid/ansible-role-hardening/pull/979 is resolved and release is made
-    # ===================================================================
-
-    - name: Check if unattended-upgrades service exists and is enabled
-      ansible.builtin.systemd:
-        name: unattended-upgrades
-      register: unattended_upgrades_status
-      failed_when: false
-      become: true
-
-    - name: Restart unattended-upgrades to apply configuration changes
-      ansible.builtin.systemd_service:
-        name: unattended-upgrades
-        state: restarted
-        enabled: true
-      when:
-        - ansible_facts.virtualization_type not in ["container", "docker", "podman"]
-        - unattended_upgrades_status.status is defined
-        - unattended_upgrades_status.status.LoadState == "loaded"
-        - unattended_upgrades_status.status.UnitFileState in ["enabled", "enabled-runtime"]
-      become: true
 
     # ===================================================================
     # POST-CONFIGURATION SECTION

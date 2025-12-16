@@ -1,0 +1,8 @@
+# Minimal Docker rootless compatibility
+capability setuid,
+capability setgid,
+
+# Allow user namespace mapping files (owner-restricted)
+owner @{PROC}/@{pid}/uid_map w,
+owner @{PROC}/@{pid}/gid_map w,
+owner @{PROC}/@{pid}/setgroups w,

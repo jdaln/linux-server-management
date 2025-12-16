@@ -122,20 +122,20 @@ See the example configurations in `docs/inventory.md` for detailed guidance on s
 ### 3. Run a playbook
 ```bash
 # Set your SSH username
-BASTION_USER="your_username"
+ANSIBLE_USER="your_username"
 
 # The below assumes that you ran ssh-add so that you won't be prompted countless time for your ssh key password.
 
 # Run the setup playbook
 ansible-playbook -i inventories/your-inventory/inventory \
                  -l target_group_or_host \
-                 -u $BASTION_USER \
+                 -u $ANSIBLE_USER \
                  setup-playbook.yml
 
 # Add -K flag if sudo password is required
 ansible-playbook -i inventories/your-inventory/inventory \
                  -l target_group_or_host \
-                 -u $BASTION_USER \
+                 -u $ANSIBLE_USER \
                  -K \
                  setup-playbook.yml
 ```

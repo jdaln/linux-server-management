@@ -31,7 +31,7 @@
 #   ansible-playbook -i inventory install-docker-rootless.yml -e DOCKER_USER=myuser
 #
 # Based on: https://github.com/konstruktoid/ansible-role-docker-rootless
-# Licensed under: Apache License 2.0
+# Licensed under: Apache License 2.0.
 #
 
 - name: Install Docker in Rootless Mode
@@ -40,33 +40,29 @@
 
   # Pre-flight checks to ensure system compatibility
   pre_tasks:
-    - name: Validate kernel support for user namespaces
-      ansible.builtin.shell: |
-        if [ -f /proc/sys/user/max_user_namespaces ]; then
-          max_ns=$(cat /proc/sys/user/max_user_namespaces)
-          if [ "$max_ns" -gt 0 ]; then
-            echo "User namespaces supported (max: $max_ns)"
-          else
-            echo "User namespaces disabled"
-            exit 1
-          fi
-        else
-          echo "User namespace support unknown"
-        fi
-      register: namespace_check
-      changed_when: false
-      failed_when: namespace_check.rc != 0
-      tags: [validation, always]
 
-    - name: Display Docker installation information
-      ansible.builtin.debug:
-        msg:
-          - "Target host: {{ inventory_hostname }}"
-          - "Docker user: {{ DOCKER_USER | default('dockeruser') }}"
-          - "Rootless mode: Enabled"
-          - "Compose installation: {{ DOCKER_COMPOSE | default(false) }}"
-          - "Privileged ports: {{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"
-      tags: [info, always]
+    - name: Check if unprivileged_userns AppArmor profile exists
+      ansible.builtin.stat:
+        path: /etc/apparmor.d/local/unprivileged_userns
+      become: true
+      register: unprivileged_userns_apparmor_profile
+      tags: [docker-config, apparmor]
+
+    - name: Install pasta (passt) package for docker rootless networking
+      ansible.builtin.apt:
+        name: passt
+        state: present
+        update_cache: true
+      become: true
+      tags: [docker-setup, packages]
+
+    - name: Enable lingering for Docker user
+      ansible.builtin.command:
+        cmd: "loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
+        creates: "/var/lib/systemd/linger/{{ DOCKER_USER | default('dockeruser') }}"
+      become: true
+      tags: [docker-setup, user-config]
+
 
   tasks:
     # ===================================================================
@@ -95,7 +91,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'v0.58.0'  # Pinned version for reproducibility
+        version: 'ec91f6176ec7248ff55bd46fca5fc962cc3ac754'  # Pinned version for reproducibility - some commits after 1.9.0
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]
@@ -116,8 +112,7 @@
         docker_allow_privileged_ports: "{{ DOCKER_ALLOW_PRIVILEGED_PORTS | default(false) }}"  # Allow binding to ports <1024
 
         # === DOCKER COMPOSE CONFIGURATION ===
-        docker_compose: "{{ DOCKER_COMPOSE | default(false) }}"               # Install Docker Compose
-        docker_compose_arch: "{{ DOCKER_COMPOSE_ARCH | default('x86_64') }}"  # Architecture for Compose download
+        docker_compose: "{{ DOCKER_COMPOSE | default(true) }}"               # Install Docker Compose
 
         # === ROOTFUL DOCKER CONFIGURATION ===
         # These options control traditional rootful Docker (usually disabled for security)
@@ -125,32 +120,65 @@
         docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"                  # Install rootful Docker alongside rootless
         docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"        # Additional rootful Docker options
 
+        # === NETWORK DRIVER CONFIGURATION ===
+        # pasta: Modern, better AppArmor compatibility, works with hidepid=2
+        docker_driver_network: "{{ DOCKER_NETWORK_DRIVER | default('pasta') }}"
+        # implicit port driver required for pasta
+        docker_driver_port: "implicit"
+
         # === SERVICE MANAGEMENT ===
-        docker_service_restart: "{{ DOCKER_SERVICE_RESTART | default(true) }}"      # Restart Docker service after installation
+        docker_service_restart: true  # Let the role handle service restart properly
         docker_unattended_upgrades: "{{ DOCKER_UNATTENDED_UPGRADES | default(true) }}"  # Enable automatic Docker updates
 
         # === USER CONFIGURATION ===
+        create_docker_user: true
         docker_user_bashrc: "{{ DOCKER_USER_BASHRC | default(true) }}"  # Add Docker environment to user's .bashrc
         docker_user: "{{ DOCKER_USER | default('dockeruser') }}"        # Username for Docker installation
       tags: [docker-installation, docker-config]
 
   # Post-installation validation and information
   post_tasks:
-    - name: Verify Docker rootless installation
-      ansible.builtin.command: |
-        sudo -u {{ DOCKER_USER | default('dockeruser') }} docker version
-      register: docker_version_check
-      changed_when: false
-      failed_when: false
-      tags: [validation, post-check]
 
-    - name: Check Docker daemon status for user
-      ansible.builtin.command: |
-        sudo -u {{ DOCKER_USER | default('dockeruser') }} systemctl --user is-active docker
-      register: docker_service_check
+    - name: Configure Docker to use cgroupfs driver (bypasses systemd/polkit issues)
+      ansible.builtin.copy:
+        dest: "/home/{{ DOCKER_USER | default('dockeruser') }}/.config/docker/daemon.json"
+        mode: '0644'
+        content: |
+          {
+            "exec-opts": ["native.cgroupdriver=cgroupfs"]
+          }
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: docker_daemon_config
+      notify: Restart rootless docker
+      tags: [docker-config]
+
+    - name: Check Docker version for rootless user
+      ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
+      register: docker_version_check
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
       changed_when: false
       failed_when: false
-      tags: [validation, post-check]
+      tags: [info, summary, always]
+
+    - name: Check Docker service status for rootless user
+      ansible.builtin.shell: "export XDG_RUNTIME_DIR=/run/user/$(id -u) && systemctl --user status docker"
+      register: docker_service_check
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: false
+      failed_when: false
+      tags: [info, summary, always]
+
+    - name: Display raw Docker service status for debugging
+      ansible.builtin.debug:
+        msg: "Raw Docker service status:\n{{ docker_service_check.stdout }}\n{{ docker_service_check.stderr }}"
+      tags: [debug, always]
 
     - name: Display Docker installation summary
       ansible.builtin.debug:
@@ -158,22 +186,85 @@
           - "===== DOCKER ROOTLESS INSTALLATION SUMMARY ====="
           - "Host: {{ inventory_hostname }}"
           - "Docker user: {{ DOCKER_USER | default('dockeruser') }}"
-          - "Docker version: {{ docker_version_check.stdout.split('\n')[1] if docker_version_check.rc == 0 else 'Check failed' }}"
+          - "Docker version: {{ docker_version_check.stdout if docker_version_check.rc == 0 else 'Check failed' }}"
           - "Service status: {{ docker_service_check.stdout if docker_service_check.rc == 0 else 'Check failed' }}"
           - "Rootless mode: Enabled"
           - "Compose installed: {{ DOCKER_COMPOSE | default(false) }}"
           - "=================================================="
       tags: [info, summary, always]
 
+    - name: Get Docker user info for usage instructions
+      become: true
+      ansible.builtin.user:
+        name: "{{ DOCKER_USER | default('dockeruser') }}"
+      check_mode: true
+      register: docker_user_info_final
+      tags: [info, instructions, always]
+
+    - name: Ensure previous test container is removed
+      ansible.builtin.shell: |
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker rm -f test-nginx
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: remove_test_container_pre
+      failed_when: remove_test_container_pre.rc != 0 and 'No such container' not in remove_test_container_pre.stderr
+      changed_when: remove_test_container_pre.rc == 0
+      tags: [test, always]
+
+    - name: Start Nginx container for testing
+      ansible.builtin.shell: |
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker run -d --name test-nginx -p 8080:80 nginx:alpine
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: true
+      tags: [test, always]
+
+    - name: Verify Nginx service
+      ansible.builtin.shell: |
+        curl --retry 5 --retry-delay 2 -f http://localhost:8080
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: false
+      # noqa: command-instead-of-module
+      tags: [test, always]
+
+    - name: Cleanup test container
+      ansible.builtin.shell: |
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker rm -f test-nginx
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: remove_test_container_post
+      failed_when: remove_test_container_post.rc != 0 and 'No such container' not in remove_test_container_post.stderr
+      changed_when: remove_test_container_post.rc == 0
+      tags: [test, always]
+
+
     - name: Display Docker usage instructions
       ansible.builtin.debug:
         msg:
           - "DOCKER USAGE INSTRUCTIONS:"
           - "1. Switch to Docker user: sudo -u {{ DOCKER_USER | default('dockeruser') }} -i"
-          - "2. Start Docker daemon: systemctl --user start docker"
+          - "2. Check Docker daemon: systemctl --user status docker"
           - "3. Test Docker: docker run hello-world"
           - "4. For automatic startup: loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
-          - "5. Docker socket: /run/user/$(id -u)/docker.sock"
+          - "5. Docker socket: /run/user/{{ docker_user_info_final.uid }}/docker.sock"
           - "6. Docker data: ~/.local/share/docker/"
           - ""
           - "SECURITY NOTES:"
@@ -181,4 +272,28 @@
           - "- Containers cannot access host root filesystem"
           - "- Limited to user's file permissions and capabilities"
           - "- Network namespace isolation provides additional security"
+          - ""
+          - "TROUBLESHOOTING:"
+          - "If Docker fails to start, check:"
+          - "- AppArmor denials: sudo journalctl | grep -i apparmor | grep slirp4netns"
+          - "- Docker logs: journalctl --user -u docker -n 100"
+          - "- Docker rootless log: cat ~/docker-rootless.log"
+          - "- Test slirp4netns: /usr/bin/slirp4netns --help"
+          - "- To debug AppArmor, set DOCKER_APPARMOR_COMPLAIN_MODE=true and re-run"
       tags: [info, instructions, always]
+
+  handlers:
+    - name: Restart rootless docker
+      ansible.builtin.shell: |
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        systemctl --user daemon-reload
+        systemctl --user restart docker
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: docker_restart_result
+      changed_when: true
+      retries: 3
+      delay: 2
+      until: docker_restart_result.rc == 0
