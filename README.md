@@ -7,6 +7,7 @@ This repository provides a collection of Ansible playbooks and roles designed to
 ## Features
 
 - **User Management**: Automated user account creation with SSH key management and sudo configuration
+- **Two-Factor Authentication**: TOTP-based 2FA (Aegis, Google Authenticator, Authy, Bitwarden, etc...) for SSH login
 - **Docker Installation**: Rootless Docker setup for enhanced security
 - **Multi-Environment Support**: Organized inventory structure for different environments
 - **Testing Framework**: Vagrant-based testing for playbook validation
@@ -75,10 +76,12 @@ Manages user accounts with the following features:
 - Sets up sudo permissions for admin users
 - Allows limited sudo commands for non-admin users
 - Forces password change on first login
+- **Two-Factor Authentication (2FA)**: Optional TOTP-based 2FA enforcement
 
 **Required Variables**:
 - `SSH_USERLIST`: List of users to create (used by users_add role)
 - `GENERALINITIALPASSWORD`: Default initial password (use Ansible Vault)
+- `ENABLE_2FA`: Enable/disable 2FA globally (true/false)
 - `AUDITD_ACTION_MAIL_ACCT`: Email address for audit system alerts
 - `MANAGE_UFW`: Enable/disable UFW firewall management (true/false)  
 - `UFW_OUTGOING_TRAFFIC`: List of allowed outbound traffic rules
@@ -93,6 +96,7 @@ SSH_USERLIST:
     admin: true
     public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI..."
 
+ENABLE_2FA: true  # Enforce TOTP-based 2FA for SSH login
 AUDITD_ACTION_MAIL_ACCT: "security@example.com"
 MANAGE_UFW: true
 UFW_OUTGOING_TRAFFIC:

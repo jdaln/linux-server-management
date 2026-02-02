@@ -56,6 +56,8 @@
           - AUTO_UPDATES_OPTIONS.reboot | type_debug == "bool"
           - SSHD_ADMIN_NET is defined
           - SSHD_ADMIN_NET | length > 0
+          - ENABLE_2FA is defined
+          - ENABLE_2FA | type_debug == "bool"
         fail_msg: |
           Missing required variables. Please ensure all mandatory variables are defined:
           - SSH_USERLIST: List of users to create
@@ -64,6 +66,7 @@
           - UFW_OUTGOING_TRAFFIC: List of allowed outbound traffic rules
           - AUTO_UPDATES_OPTIONS.reboot: Allow automatic reboots for updates (true/false)
           - SSHD_ADMIN_NET: List of networks allowed for SSH admin access
+          - ENABLE_2FA: Enable/disable 2FA globally (true/false)
         success_msg: "All required variables validation passed"
       tags: [validation, always]
 
@@ -73,6 +76,7 @@
           - "Target host: {{ inventory_hostname }}"
           - "Environment: {{ environment | default('undefined') }}"
           - "User management: {{ MANAGE_USERS | default(true) }}"
+          - "2FA enabled globally: {{ ENABLE_2FA }}"
           - "Number of users to create: {{ SSH_USERLIST | length }}"
       tags: [info, always]
 
@@ -89,6 +93,7 @@
           become: true
       vars:
         users_add_userlist: "{{ SSH_USERLIST }}"
+        enable_2fa: "{{ ENABLE_2FA }}"
       when: MANAGE_USERS is not defined or MANAGE_USERS | bool
       tags: [users, user-management]
 
@@ -170,6 +175,10 @@
         sshd_max_auth_tries: "{{ SSHD_MAX_AUTH_TRIES | default(3) }}"                            # Maximum SSH auth attempts
         sshd_allow_tcp_forwarding: "{{ SSHD_ALLOW_TCP_FORWARDING | default(false) }}"  # Allow SSH port forwarding
         sshd_client_alive_interval: "{{ SSHD_TIMEOUT_SECS | default(300) }}"        # SSH client timeout (5 min default)
+        sshd_use_pam: "{{ ENABLE_2FA | bool or SSHD_USE_PAM | default(true) }}"
+        sshd_kbd_interactive_authentication: "{{ ENABLE_2FA | bool or SSHD_KBD_INTERACTIVE_AUTHENTICATION | default(true) }}"
+        sshd_password_authentication: "{{ SSHD_PASSWORD_AUTHENTICATION | default(false) }}"
+        sshd_authentication_methods: "{{ 'publickey,keyboard-interactive:pam' if (ENABLE_2FA | default(false) | bool) else 'publickey' }}"
 
         # === SYSTEM SECURITY ===
         disable_apport: true                                      # Disable Ubuntu crash reporting
@@ -232,7 +241,7 @@
         insertafter: "# Print the message of the day upon successful login"
         state: present
       become: true
-      when: ansible_os_family == "Debian"
+      when: ansible_facts["os_family"] == "Debian"
 
   # Post-execution validation and reporting
   post_tasks:

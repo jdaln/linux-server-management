@@ -39,3 +39,4 @@ LOGIND_HARDENING:
   idleaction: lock
   idleactionsec: 15min
   removeipc: true
+ENABLE_2FA: false

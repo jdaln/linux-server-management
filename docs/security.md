@@ -203,18 +203,41 @@ sshd_config_settings:
   AllowGroups: ssh-users
 ```
 
-### Multi-Factor Authentication (not yet implemented in these playbooks)
+### Multi-Factor Authentication
 
-#### Setting up TOTP (Time-based One-Time Password)
+This playbook implements TOTP-based 2FA using Google Authenticator PAM module.
+
+#### How It Works
+
+1. **First Login**: User authenticates with SSH key, then sees QR code for 2FA enrollment
+2. **Enrollment**: User scans QR code with authenticator app (Aegis, Google Authenticator, Authy, Bitwarden, etc..., etc.)
+3. **Subsequent Logins**: User provides SSH key + 6-digit TOTP code
+
+#### Configuration
+
+2FA is enabled globally via the `ENABLE_2FA` variable:
+```yaml
+ENABLE_2FA: true
+```
+
+Secrets are stored centrally in `/var/lib/google-authenticator/` (root-owned, mode 0700).
+
+#### Security Features
+
+- **Token reuse prevention**: Each code can only be used once (`-d` flag)
+- **Rate limiting**: Max 3 attempts per 30 seconds (`-r 3 -R 30`)
+- **Time window**: Accepts 3 codes to handle clock skew (`-w 3`)
+- **Emergency codes**: 5 one-time backup codes generated
+
+#### Admin Recovery Process
+
+If a user loses their 2FA device or needs to re-enroll:
+
 ```bash
-# Install Google Authenticator PAM module
-sudo apt install libpam-google-authenticator
+# Remove the user's 2FA secret file
+sudo rm /var/lib/google-authenticator/username
 
-# Configure for user
-google-authenticator -t -d -f -r 3 -R 30 -w 3
-
-# PAM configuration (/etc/pam.d/sshd)
-auth required pam_google_authenticator.so
+# On next SSH login, the user will be prompted to set up 2FA again
 ```
 
 #### SSH with MFA Configuration
