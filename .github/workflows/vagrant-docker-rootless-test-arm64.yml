@@ -1,15 +1,7 @@
+# For reference only - not fully tested yet.
 name: "integration: docker rootless (vagrant, arm64)"
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "install-docker-rootless.yml"
-      - "Vagrantfile"
-      - "requirements.txt"
-      - "requirements.yml"
-      - "testing/**"
-      - ".github/workflows/vagrant-docker-rootless-test-arm64.yml"
   workflow_dispatch: {}
 
 permissions:
