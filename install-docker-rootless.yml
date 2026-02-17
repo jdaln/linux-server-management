@@ -162,7 +162,7 @@
       tags: [docker-config]
 
     - name: Check Docker version for rootless user
-      ansible.builtin.shell: "export PATH=$PATH:$HOME/.local/bin && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
+      ansible.builtin.shell: "export PATH=$HOME/bin:$HOME/.local/bin:$PATH && export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock && docker --version"
       register: docker_version_check
       args:
         executable: /bin/bash
@@ -238,14 +238,18 @@
       tags: [test, always]
 
     - name: Verify Nginx service
-      ansible.builtin.shell: |
-        curl --retry 5 --retry-delay 2 -f http://localhost:8080
-      args:
-        executable: /bin/bash
+      ansible.builtin.uri:
+        url: http://localhost:8080/
+        status_code: 200
+        return_content: false
+        timeout: 2
       become: true
       become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      register: nginx_check
       changed_when: false
-      # noqa: command-instead-of-module
+      retries: 15
+      delay: 2
+      until: nginx_check.status == 200
       tags: [test, always]
 
     - name: Cleanup test container
