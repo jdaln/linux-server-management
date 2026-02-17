@@ -17,7 +17,7 @@
         # Keep the test stable: avoid reboots during provisioning.
         automatic_updates:
           enabled: "{{ AUTO_UPDATES_OPTIONS.enabled | default(true) }}"
-          only_security: "{{ AUTO_UPDATES_OPTIONS.only_security | default(true) }}"
+          only_security: "{{ AUTO_UPDATES_OPTIONS.only_security | default(false) }}"
           reboot: false
           reboot_from_time: "{{ AUTO_UPDATES_OPTIONS.reboot_from_time | default('2:00') }}"
           reboot_time_margin_mins: "{{ AUTO_UPDATES_OPTIONS.reboot_time_margin_mins | default(20) }}"

@@ -99,7 +99,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'e8d6018d01b5ac241fd823ed7ccd6f540eece3db'  #v1.14.0
+        version: 'e8d6018d01b5ac241fd823ed7ccd6f540eece3db'  # v1.14.0
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]

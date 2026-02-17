@@ -128,14 +128,78 @@ jobs:
         id: vars
         run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
 
-      - name: Update pinned playbook with new version
+      - name: Resolve role tag to commit SHA
+        run: |
+          set -euo pipefail
+          TITLE="${{ github.event.pull_request.title }}"
+
+          if echo "$TITLE" | grep -qi "dependency konstruktoid.docker_rootless"; then
+            ROLE_REPO_URL="https://github.com/konstruktoid/ansible-role-docker-rootless.git"
+            TARGET_FILE="install-docker-rootless.yml"
+          else
+            ROLE_REPO_URL="https://github.com/konstruktoid/ansible-role-hardening.git"
+            TARGET_FILE="setup-playbook.yml"
+          fi
+
+          TAG="${{ env.VERSION }}"
+          SHA="$(git ls-remote "$ROLE_REPO_URL" "refs/tags/$TAG^{}" | awk '{print $1}' | head -n 1 || true)"
+          if [ -z "$SHA" ]; then
+            SHA="$(git ls-remote "$ROLE_REPO_URL" "refs/tags/$TAG" | awk '{print $1}' | head -n 1 || true)"
+          fi
+
+          if [ -z "$SHA" ]; then
+            echo "Failed to resolve tag $TAG in $ROLE_REPO_URL"
+            exit 1
+          fi
+
+          echo "ROLE_REPO_URL=$ROLE_REPO_URL" >> "$GITHUB_ENV"
+          echo "TARGET_FILE=$TARGET_FILE" >> "$GITHUB_ENV"
+          echo "ROLE_SHA=$SHA" >> "$GITHUB_ENV"
+
+      - name: Update pinned playbook with new version (commit SHA + tag comment)
         run: |
           TITLE="${{ github.event.pull_request.title }}"
-          if echo "$TITLE" | grep -qi "dependency konstruktoid.docker_rootless"; then
-            sed -i "s/version: 'v[0-9]*\\.[0-9]*\\.[0-9]*'/version: '${{ env.VERSION }}'/" install-docker-rootless.yml
-          else
-            sed -i "s/version: 'v[0-9]*\\.[0-9]*\\.[0-9]*'/version: '${{ env.VERSION }}'/" setup-playbook.yml
-          fi
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          target = os.environ["TARGET_FILE"]
+          repo = os.environ["ROLE_REPO_URL"]
+          sha = os.environ["ROLE_SHA"]
+          tag = os.environ["VERSION"]
+
+          p = pathlib.Path(target)
+          lines = p.read_text().splitlines(True)
+
+          repo_re = re.compile(rf"^\\s*repo:\\s*{re.escape(repo)}\\s*$")
+          version_re = re.compile(r"^(\\s*)version:\\s*.*$")
+
+          out = []
+          i = 0
+          updated = False
+          while i < len(lines):
+            line = lines[i]
+            out.append(line)
+            if repo_re.search(line):
+              j = i + 1
+              while j < len(lines) and not version_re.match(lines[j]):
+                out.append(lines[j])
+                j += 1
+              if j >= len(lines):
+                raise SystemExit(f"Found repo line for {repo} but no subsequent version line in {target}")
+              indent = version_re.match(lines[j]).group(1)
+              out.append(f"{indent}version: '{sha}'  # {tag}\\n")
+              updated = True
+              out.extend(lines[j + 1 :])
+              break
+            i += 1
+
+          if not updated:
+            raise SystemExit(f"Did not find repo line for {repo} in {target}")
+
+          p.write_text("".join(out))
+          PY
 
       - name: Commit and push changes
         run: |
