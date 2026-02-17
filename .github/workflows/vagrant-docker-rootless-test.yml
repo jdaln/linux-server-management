@@ -83,17 +83,16 @@ jobs:
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install --no-deps -r testing/requirements.yml
 
-      - name: Run Vagrant integration test (Ubuntu Jammy)
+      - name: Run Vagrant integration test (Ubuntu Noble)
         run: |
           set -euxo pipefail
-          vagrant up jammy noble
+          vagrant up noble
 
           # Double-check rootless Docker works from inside the VM.
-          vagrant ssh jammy -c "sudo -u dockeruser -i bash -lc 'docker --version && docker info >/dev/null && docker run --rm hello-world >/dev/null'"
           vagrant ssh noble -c "sudo -u dockeruser -i bash -lc 'docker --version && docker info >/dev/null && docker run --rm hello-world >/dev/null'"
 
       - name: Clean up Vagrant session
         if: always()
         run: |
-          vagrant halt jammy noble || true
-          vagrant destroy -f jammy noble || true
+          vagrant halt noble || true
+          vagrant destroy -f noble || true

@@ -98,7 +98,7 @@ jobs:
           fi
 
       - name: Run vagrant up (Debian + Ubuntu)
-        run: vagrant up bookworm jammy noble debian13
+        run: vagrant up bookworm noble debian13
         # Initializes and provisions the Vagrant environment as defined in Vagrantfile
 
       - name: SSH into the box after boot

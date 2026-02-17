@@ -76,26 +76,6 @@ Vagrant.configure("2") do |config|
     end
   end
 
-  config.vm.define "jammy" do |jammy|
-    jammy.vm.box = "ubuntu/jammy64"
-    jammy.ssh.insert_key = true
-    jammy.vm.hostname = "jammy"
-    jammy.vm.boot_timeout = 600
-    jammy.vm.provision "shell",
-      inline: "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl",
-      upload_path: "/var/tmp/vagrant-shell"
-    jammy.vm.provision "ansible" do |a|
-      a.verbose = "v"
-      a.limit = "all"
-      a.playbook = test_playbook
-      a.extra_vars = {
-        "sshd_admin_net" => ["0.0.0.0/0"],
-        "sshd_allow_groups" => ["vagrant", "sudo", "ubuntu"],
-        "ansible_python_interpreter" => "/usr/bin/python3",
-      }
-     end
-   end
-
   config.vm.define "noble" do |noble|
     noble.vm.box = "bento/ubuntu-24.04"
     noble.ssh.insert_key = true

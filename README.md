@@ -16,7 +16,7 @@ This repository provides a collection of Ansible playbooks and roles designed to
 ## Supported Systems
 
 - **Debian**: Bookworm (12) and newer
-- **Ubuntu**: Jammy (22.04 LTS) and newer
+- **Ubuntu**: Noble (24.04 LTS) and newer
 - **Architecture**: x86_64
 
 ## Prerequisites
