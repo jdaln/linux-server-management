@@ -16,3 +16,5 @@ jobs:
       - uses: actions/checkout@0c366fd6a839edf440554fa01a7085ccba70ac98 # v5.0.1
       - name: Lint Ansible Playbook
         uses: ansible/ansible-lint@7f6abc5ef97d0fb043a0f3d416dfbc74399fbda0 # v26.1.1
+        with:
+          requirements_file: requirements-lint.yml

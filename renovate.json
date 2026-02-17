@@ -4,7 +4,8 @@
   ],
   "ansible-galaxy": {
     "managerFilePatterns": [
-      "/(^|/)testing/requirements\\.ya?ml$/"
+      "/(^|/)testing/requirements\\.ya?ml$/",
+      "/(^|/)requirements-lint\\.ya?ml$/"
     ]
   }
 }
