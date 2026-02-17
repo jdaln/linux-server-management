@@ -56,6 +56,14 @@
       become: true
       tags: [docker-setup, packages]
 
+    - name: Ensure Docker user exists before enabling lingering
+      ansible.builtin.user:
+        name: "{{ DOCKER_USER | default('dockeruser') }}"
+        state: present
+        create_home: true
+      become: true
+      tags: [docker-setup, user-config]
+
     - name: Enable lingering for Docker user
       ansible.builtin.command:
         cmd: "loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
@@ -91,7 +99,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-docker-rootless.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.docker_rootless"
-        version: 'ec91f6176ec7248ff55bd46fca5fc962cc3ac754'  # Pinned version for reproducibility - some commits after 1.9.0
+        version: 'e8d6018d01b5ac241fd823ed7ccd6f540eece3db'  #v1.14.0
       delegate_to: localhost
       run_once: true
       tags: [docker-setup, role-download]

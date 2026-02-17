@@ -1,0 +1,53 @@
+---
+- name: Apply Baseline Hardening (Test)
+  hosts: all
+  any_errors_fatal: true
+  become: true
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Apply CIS-based system hardening via konstruktoid.hardening
+      ansible.builtin.import_role:
+        name: konstruktoid.hardening
+      vars:
+        # Suppress ansible-lint var-naming warning for third-party role variables
+        # noqa: var-naming[no-role-prefix]
+
+        # Keep the test stable: avoid reboots during provisioning.
+        automatic_updates:
+          enabled: "{{ AUTO_UPDATES_OPTIONS.enabled | default(true) }}"
+          only_security: "{{ AUTO_UPDATES_OPTIONS.only_security | default(true) }}"
+          reboot: false
+          reboot_from_time: "{{ AUTO_UPDATES_OPTIONS.reboot_from_time | default('2:00') }}"
+          reboot_time_margin_mins: "{{ AUTO_UPDATES_OPTIONS.reboot_time_margin_mins | default(20) }}"
+          custom_origins: "{{ AUTO_UPDATES_OPTIONS.custom_origins | default('') }}"
+
+        auditd_action_mail_acct: "{{ AUDITD_ACTION_MAIL_ACCT }}"
+
+        manage_ufw: "{{ MANAGE_UFW }}"
+        ufw_outgoing_traffic: "{{ UFW_OUTGOING_TRAFFIC }}"
+        disable_wireless: "{{ DISABLE_WIRELESS | default(true) }}"
+
+        # Keep Vagrant connectivity during testing.
+        manage_ssh: true
+        sshd_admin_net: "{{ SSHD_ADMIN_NET }}"
+        sshd_allow_groups:
+          - vagrant
+          - sudo
+          - debian
+          - ubuntu
+
+        # Mirror typical docker-host guidance: don't kill the docker user's processes.
+        logind:
+          killuserprocesses: "{{ LOGIND_HARDENING.killuserprocesses | default(true) }}"
+          killexcludeusers: "{{ (LOGIND_HARDENING.killexcludeusers | default([])) + ['dockeruser'] | unique }}"
+          idleaction: "{{ LOGIND_HARDENING.idleaction | default('lock') }}"
+          idleactionsec: "{{ LOGIND_HARDENING.idleactionsec | default('15min') }}"
+          removeipc: "{{ LOGIND_HARDENING.removeipc | default(true) }}"
+
+        # Avoid user management side-effects in tests.
+        manage_users: false
+
+- name: Install Docker Rootless (E2E)
+  ansible.builtin.import_playbook: ../install-docker-rootless.yml

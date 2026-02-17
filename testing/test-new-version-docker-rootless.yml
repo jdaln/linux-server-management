@@ -1,0 +1,65 @@
+---
+- name: Include the konstruktoid.docker_rootless role
+  hosts: all
+  any_errors_fatal: true
+
+  pre_tasks:
+    - name: Install pasta (passt) package for docker rootless networking
+      ansible.builtin.apt:
+        name: passt
+        state: present
+        update_cache: true
+      become: true
+      tags: [docker-setup, packages]
+
+    - name: Ensure Docker user exists before enabling lingering
+      ansible.builtin.user:
+        name: "{{ DOCKER_USER | default('dockeruser') }}"
+        state: present
+        create_home: true
+      become: true
+      tags: [docker-setup, user-config]
+
+    - name: Enable lingering for Docker user
+      ansible.builtin.command:
+        cmd: "loginctl enable-linger {{ DOCKER_USER | default('dockeruser') }}"
+        creates: "/var/lib/systemd/linger/{{ DOCKER_USER | default('dockeruser') }}"
+      become: true
+      tags: [docker-setup, user-config]
+
+  tasks:
+    - name: Include role
+      ansible.builtin.import_role:
+        name: konstruktoid.docker_rootless
+      vars:
+        # Suppress ansible-lint var-naming warning for third-party role variables
+        # noqa: var-naming[no-role-prefix]
+        docker_allow_privileged_ports: false
+        docker_compose: true
+        docker_rootful_enabled: false
+        docker_rootful: false
+        docker_rootful_opts: false
+        docker_driver_network: "pasta"
+        docker_driver_port: "implicit"
+        docker_service_restart: true
+        docker_unattended_upgrades: true
+        create_docker_user: false
+        docker_user_bashrc: true
+        docker_user: "{{ DOCKER_USER | default('dockeruser') }}"
+
+  post_tasks:
+    - name: Verify docker works for rootless user (hello-world)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        export PATH=$HOME/bin:$HOME/.local/bin:$PATH
+        export XDG_RUNTIME_DIR=/run/user/$(id -u)
+        export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock
+        docker --version
+        docker info >/dev/null
+        docker run --rm hello-world >/dev/null
+      args:
+        executable: /bin/bash
+      become: true
+      become_user: "{{ DOCKER_USER | default('dockeruser') }}"
+      changed_when: false
+      tags: [test, always]

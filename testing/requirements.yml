@@ -1,6 +1,10 @@
 ---
 roles:
   - name: konstruktoid.hardening
-    version: 'v4.2.0'
+    version: 'v4.3.0'
     src: https://github.com/konstruktoid/ansible-role-hardening.git
+    scm: git
+  - name: konstruktoid.docker_rootless
+    version: 'v1.14.0'
+    src: https://github.com/konstruktoid/ansible-role-docker-rootless.git
     scm: git

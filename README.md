@@ -31,8 +31,13 @@ sudo apt install virtualbox vagrant python3-pip
 ```bash
 brew install python
 python3 -m ensurepip --upgrade
+# Vagrant (HashiCorp tap)
+brew install hashicorp/tap/hashicorp-vagrant
+
+# Provider note:
+# - Intel macOS: VirtualBox is a common choice.
+# - Apple Silicon: VirtualBox-based x86_64 boxes may not work; prefer running Vagrant tests on Linux/CI or use a supported provider (e.g., Parallels/VMware).
 brew install --cask virtualbox
-brew install vagrant
 ```
 
 ## Installation
@@ -150,14 +155,16 @@ ansible-playbook -i inventories/your-inventory/inventory \
 Test playbooks on virtual machines before deploying to production:
 
 ```bash
-# Install testing dependencies
-ansible-galaxy install -r testing/requirements.yml
+# Install Ansible dependencies used by the test playbooks
+ansible-galaxy install -r requirements.yml
+ansible-galaxy install --no-deps -r testing/requirements.yml
 
-# Start test VMs (Debian Bookworm and Ubuntu Jammy)
+# Pick the playbook to run via the Vagrant Ansible provisioner.
+# If not set, Vagrant defaults to: testing/test-new-version-hardening.yml
+export TEST_PLAYBOOK=install-docker-rootless.yml  # or testing/test-new-version-hardening.yml
+
+# Start and provision test VMs (Debian 12/13, Ubuntu 22.04/24.04)
 vagrant up
-
-# Run tests against VMs
-ansible-playbook -i testing/inventory test-playbook.yml
 ```
 
 ### Testing Individual Roles

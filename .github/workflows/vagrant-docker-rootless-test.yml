@@ -1,0 +1,83 @@
+name: "integration: docker rootless (vagrant)"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "install-docker-rootless.yml"
+      - "Vagrantfile"
+      - "requirements.txt"
+      - "requirements.yml"
+      - ".github/workflows/vagrant-docker-rootless-test.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  vagrant-docker-rootless:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VAGRANT_DIR: ~/.vagrant.d/boxes
+      TEST_PLAYBOOK: testing/e2e-hardened-then-install-docker-rootless.yml
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76 # v2.14.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout Repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Restore Vagrant box cache
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+        with:
+          path: ${{ env.VAGRANT_DIR }}
+          key: ${{ runner.os }}-vagrant-${{ hashFiles('**/Vagrantfile') }}
+          restore-keys: |
+            ${{ runner.os }}-vagrant-
+
+      - name: Install Vagrant + VirtualBox (official HashiCorp APT repo for Vagrant)
+        run: |
+          set -euxo pipefail
+          sudo apt update
+          sudo apt -y install apt-transport-https ca-certificates curl wget gnupg software-properties-common
+
+          wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg >/dev/null
+          codename="$(lsb_release -cs)"
+          sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null <<EOF
+          deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $codename main
+          EOF
+          sudo apt-get update
+
+          sudo apt-get install -y virtualbox virtualbox-dkms vagrant python3-pip
+
+          # Patch until fix: https://github.com/hashicorp/vagrant/issues/13404#issuecomment-2490437792
+          git clone https://github.com/dheerapat/vagrant-vbguest.git
+          (cd vagrant-vbguest && gem build vagrant-vbguest.gemspec && vagrant plugin install vagrant-vbguest-0.32.1.gem)
+
+          vagrant plugin install vagrant-disksize
+
+      - name: Install Python + Ansible deps
+        run: |
+          set -euxo pipefail
+          pip install -r requirements.txt
+          ansible-galaxy install -r requirements.yml
+          ansible-galaxy install --no-deps -r testing/requirements.yml
+
+      - name: Run Vagrant integration test (Ubuntu Jammy)
+        run: |
+          set -euxo pipefail
+          vagrant up jammy noble
+
+          # Double-check rootless Docker works from inside the VM.
+          vagrant ssh jammy -c "sudo -u dockeruser -i bash -lc 'docker --version && docker info >/dev/null && docker run --rm hello-world >/dev/null'"
+          vagrant ssh noble -c "sudo -u dockeruser -i bash -lc 'docker --version && docker info >/dev/null && docker run --rm hello-world >/dev/null'"
+
+      - name: Clean up Vagrant session
+        if: always()
+        run: |
+          vagrant halt jammy noble || true
+          vagrant destroy -f jammy noble || true
