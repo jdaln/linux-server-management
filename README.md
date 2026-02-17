@@ -34,9 +34,6 @@ python3 -m ensurepip --upgrade
 # Vagrant (HashiCorp tap)
 brew install hashicorp/tap/hashicorp-vagrant
 
-# Provider note:
-# - Intel macOS: VirtualBox is a common choice.
-# - Apple Silicon: VirtualBox-based x86_64 boxes may not work; prefer running Vagrant tests on Linux/CI or use a supported provider (e.g., Parallels/VMware).
 brew install --cask virtualbox
 ```
 
