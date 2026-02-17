@@ -14,6 +14,12 @@
         # Suppress ansible-lint var-naming warning for third-party role variables
         # noqa: var-naming[no-role-prefix]
 
+        # Keep CI/Vagrant tests stable: avoid upgrades that can trigger initramfs/kernel work (disk/time) and require reboots.
+        system_upgrade: false
+
+        # Keep tests fast and reduce disk churn in ephemeral CI VMs.
+        manage_aide: false
+
         # Keep the test stable: avoid reboots during provisioning.
         automatic_updates:
           enabled: "{{ AUTO_UPDATES_OPTIONS.enabled | default(true) }}"

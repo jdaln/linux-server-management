@@ -31,7 +31,7 @@ Vagrant.configure("2") do |config|
       inline: "ip link set dev eth0 down; ip link set eth0 name eth0.101; ip link set dev eth0.101 up; dhclient -r eth0.101; dhclient eth0.101",
       upload_path: "/var/tmp/vagrant-shell"
     bookworm_vlan.vm.provision "shell",
-      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl",
+      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
       upload_path: "/var/tmp/vagrant-shell"
     bookworm_vlan.vm.provision "ansible" do |a|
       a.verbose = "v"
@@ -60,7 +60,7 @@ Vagrant.configure("2") do |config|
       bookworm.vbguest.auto_update = false
     end
     bookworm.vm.provision "shell",
-      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl",
+      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
       upload_path: "/var/tmp/vagrant-shell"
     bookworm.vm.provision "ansible" do |a|
       a.verbose = "v"
@@ -82,7 +82,7 @@ Vagrant.configure("2") do |config|
     noble.vm.hostname = "noble"
     noble.vm.boot_timeout = 600
     noble.vm.provision "shell",
-      inline: "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl",
+      inline: "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
       upload_path: "/var/tmp/vagrant-shell"
     noble.vm.provision "ansible" do |a|
       a.verbose = "v"
@@ -98,6 +98,9 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "debian13" do |debian13|
     debian13.vm.box = "bento/debian-13"
+    if Vagrant.has_plugin?("vagrant-disksize")
+      debian13.disksize.size = '25GB'
+    end
     debian13.ssh.insert_key = true
     debian13.vm.hostname = "debian13"
     debian13.vm.boot_timeout = 600
@@ -105,7 +108,7 @@ Vagrant.configure("2") do |config|
       debian13.vbguest.auto_update = false
     end
     debian13.vm.provision "shell",
-      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl",
+      inline: "apt-get update && apt-get remove -y dkms && apt-get -y install dkms && DEBIAN_FRONTEND=noninteractive apt-get -y install python3 python3-apt curl zstd",
       upload_path: "/var/tmp/vagrant-shell"
     debian13.vm.provision "ansible" do |a|
       a.verbose = "v"
