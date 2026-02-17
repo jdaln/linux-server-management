@@ -41,6 +41,19 @@
   # Pre-flight checks to ensure system compatibility
   pre_tasks:
 
+    - name: Select RootlessKit networking configuration
+      ansible.builtin.set_fact:
+        docker_network_driver_selected: "{{ DOCKER_NETWORK_DRIVER | default('slirp4netns') }}"
+        docker_port_driver_selected: >-
+          {{
+            DOCKER_PORT_DRIVER
+            | default(
+              ((DOCKER_NETWORK_DRIVER | default('slirp4netns')) == 'pasta')
+              | ternary('implicit', 'builtin')
+            )
+          }}
+      tags: [docker-config]
+
     - name: Check if unprivileged_userns AppArmor profile exists
       ansible.builtin.stat:
         path: /etc/apparmor.d/local/unprivileged_userns
@@ -48,12 +61,39 @@
       register: unprivileged_userns_apparmor_profile
       tags: [docker-config, apparmor]
 
-    - name: Install pasta (passt) package for docker rootless networking
+    - name: Check if passt package is available (required for pasta)
+      ansible.builtin.command:
+        cmd: apt-cache show passt
+      register: passt_pkg_available
+      changed_when: false
+      failed_when: false
+      become: true
+      when:
+        - ansible_pkg_mgr == "apt"
+        - docker_network_driver_selected == "pasta"
+      tags: [docker-setup, packages]
+
+    - name: Fail if pasta networking was requested but passt is unavailable
+      ansible.builtin.fail:
+        msg: >-
+          RootlessKit networking driver 'pasta' requires the OS package 'passt',
+          but it is not available in the configured APT repositories on this host.
+          Either use DOCKER_NETWORK_DRIVER=slirp4netns (default) or upgrade the OS/repositories.
+      when:
+        - ansible_pkg_mgr == "apt"
+        - docker_network_driver_selected == "pasta"
+        - passt_pkg_available.rc != 0
+      tags: [docker-setup, packages]
+
+    - name: Install passt package (provides pasta)
       ansible.builtin.apt:
         name: passt
         state: present
         update_cache: true
       become: true
+      when:
+        - ansible_pkg_mgr == "apt"
+        - docker_network_driver_selected == "pasta"
       tags: [docker-setup, packages]
 
     - name: Ensure Docker user exists before enabling lingering
@@ -128,11 +168,10 @@
         docker_rootful: "{{ DOCKER_ROOTFUL | default(false) }}"                  # Install rootful Docker alongside rootless
         docker_rootful_opts: "{{ DOCKER_ROOTFUL_OPTS | default(false) }}"        # Additional rootful Docker options
 
-        # === NETWORK DRIVER CONFIGURATION ===
-        # pasta: Modern, better AppArmor compatibility, works with hidepid=2
-        docker_driver_network: "{{ DOCKER_NETWORK_DRIVER | default('pasta') }}"
-        # implicit port driver required for pasta
-        docker_driver_port: "implicit"
+        # === ROOTLESSKIT NETWORK DRIVER CONFIGURATION ===
+        # Defaults match the upstream role (slirp4netns + builtin) unless overridden.
+        docker_driver_network: "{{ docker_network_driver_selected }}"
+        docker_driver_port: "{{ docker_port_driver_selected }}"
 
         # === SERVICE MANAGEMENT ===
         docker_service_restart: true  # Let the role handle service restart properly
