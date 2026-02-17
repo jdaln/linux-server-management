@@ -67,6 +67,21 @@ jobs:
           #####
           vagrant plugin install vagrant-disksize
 
+      - name: Disable KVM to allow VirtualBox
+        run: |
+          set -euxo pipefail
+          # GitHub-hosted runners often have KVM modules loaded, which prevents VirtualBox from using VT-x/AMD-V.
+          if lsmod | grep -q '^kvm'; then
+            sudo modprobe -r kvm_intel 2>/dev/null || true
+            sudo modprobe -r kvm_amd 2>/dev/null || true
+            sudo modprobe -r kvm 2>/dev/null || true
+          fi
+          if lsmod | grep -q '^kvm'; then
+            echo "KVM modules still loaded; VirtualBox will fail to start VMs."
+            lsmod | grep '^kvm' || true
+            exit 1
+          fi
+
       - name: Install requirements for Python and Ansible
         run: |
           pip install -r requirements.txt
