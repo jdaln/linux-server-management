@@ -1,0 +1,75 @@
+name: "integration: docker rootless (vagrant, arm64)"
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "install-docker-rootless.yml"
+      - "Vagrantfile"
+      - "requirements.txt"
+      - "requirements.yml"
+      - "testing/**"
+      - ".github/workflows/vagrant-docker-rootless-test-arm64.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  vagrant-docker-rootless-arm64:
+    # Self-hosted runners must not run untrusted fork PR code.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS, ARM64]
+    timeout-minutes: 90
+    env:
+      TEST_PLAYBOOK: testing/e2e-hardened-then-install-docker-rootless.yml
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Verify Host Toolchain
+        run: |
+          set -euxo pipefail
+          uname -m
+          python3 --version
+          vagrant --version
+          VBoxManage --version
+
+      - name: Setup Python venv (Ansible on host PATH for Vagrant provisioner)
+        run: |
+          set -euxo pipefail
+          python3 -m venv .venv
+          . .venv/bin/activate
+          python -m pip install -U pip wheel
+          pip install -r requirements.txt
+
+      - name: Install Ansible Galaxy dependencies
+        run: |
+          set -euxo pipefail
+          . .venv/bin/activate
+          ansible-galaxy install -r requirements.yml
+          ansible-galaxy install --no-deps -r testing/requirements.yml
+
+      - name: Run Vagrant integration test (Ubuntu Noble, ARM64)
+        run: |
+          set -euxo pipefail
+          # Ensure Vagrant uses the venv ansible-playbook.
+          export PATH="$PWD/.venv/bin:$PATH"
+          export TEST_PLAYBOOK="${TEST_PLAYBOOK}"
+
+          vagrant destroy -f noble || true
+          vagrant up noble
+
+          # Sanity check: rootless docker socket works from inside the VM.
+          vagrant ssh noble -c 'set -euo pipefail
+            uid="$(id -u dockeruser)"
+            sudo -u dockeruser XDG_RUNTIME_DIR="/run/user/${uid}" DOCKER_HOST="unix:///run/user/${uid}/docker.sock" bash -lc "docker --version && docker info >/dev/null"
+          '
+
+      - name: Clean up Vagrant session
+        if: always()
+        run: |
+          vagrant halt noble || true
+          vagrant destroy -f noble || true
+

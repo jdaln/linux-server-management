@@ -193,7 +193,8 @@ ansible-playbook -i testing/inventory \
 GitHub Actions runs a few gates:
 
 - **Lint**: ansible-lint/syntax checks against repository playbooks.
-- **Integration (Vagrant)**: provisions one or more VMs and runs the playbooks end-to-end.
+- **Integration (Vagrant)**: provisions one or more VMs and runs the playbooks end-to-end (VirtualBox-based).
+- **Integration (Vagrant, ARM64)**: same as above, but runs on a self-hosted `macOS` `ARM64` runner (VirtualBox on Apple Silicon).
 - **Deps: new role version testing**: for dependency update PRs, runs Vagrant with a role-focused test playbook before auto-updating the pinned SHA in the top-level playbook.
 
 The Docker rootless integration test is intentionally end-to-end: it assumes the baseline hardening was applied first.
