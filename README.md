@@ -17,15 +17,7 @@ This repository provides a collection of Ansible playbooks and roles designed to
 
 - **Debian**: Bookworm (12) and newer
 - **Ubuntu**: Noble (24.04 LTS) and newer
-- **Architecture**: x86_64 and aarch64 (arm64)
-
-### Notes On Ubuntu Rootless Docker Networking
-
-The Docker rootless playbook uses RootlessKit with `pasta` networking (provided by the `passt` package).
-
-- Ubuntu 22.04 (Jammy) does not provide `passt` in the official repositories.
-- Ubuntu 24.04 (Noble) provides `passt` (and `/usr/bin/pasta`) in the official repositories.
-- CI runs on x86_64 GitHub runners; ARM64 has been tested locally (Vagrant/VirtualBox on Apple Silicon).
+- **Architecture**: x86_64 and aarch64 (arm64 - only Ubuntu 24.04 tested)
 
 ## Prerequisites
 
@@ -68,7 +60,7 @@ brew install --cask virtualbox
 ### setup-playbook.yml
 Main system setup playbook that includes:
 - User management and SSH key configuration
-- CIS-based system hardening via https://github.com/konstruktoid/ansible-role-hardening and customizable
+- CIS-based system hardening via https://github.com/konstruktoid/ansible-role-hardening and cusomizable
 - Essential package installation
 
 ### install-docker-rootless.yml
@@ -201,7 +193,7 @@ ansible-playbook -i testing/inventory \
 GitHub Actions runs a few gates:
 
 - **Lint**: ansible-lint/syntax checks against repository playbooks.
-- **Integration (Vagrant)**: provisions one or more VMs and runs the playbooks end-to-end (VirtualBox-based).
+- **Integration (Vagrant)**: provisions one or more VMs and runs the playbooks end-to-end.
 - **Deps: new role version testing**: for dependency update PRs, runs Vagrant with a role-focused test playbook before auto-updating the pinned SHA in the top-level playbook.
 
 The Docker rootless integration test is intentionally end-to-end: it assumes the baseline hardening was applied first.
@@ -211,8 +203,7 @@ The Docker rootless integration test is intentionally end-to-end: it assumes the
 - **Rootless Docker cgroups**: if Docker reports `Cgroup Driver: none` in rootless mode, resource limits (`--memory`, `--cpus`, `--pids-limit`) are not enforced.
   This repo currently writes `/home/dockeruser/.config/docker/daemon.json` to force `native.cgroupdriver=cgroupfs` as a workaround in some environments, which can cause cgroups to be effectively disabled in others.
   To verify: run `docker info | grep -i cgroup` as the rootless Docker user.
-  If you need cgroup enforcement in rootless mode and your system supports it, remove that override and restart the user service (`systemctl --user restart docker`).
-- **Vagrant on Apple Silicon (arm64)**: VirtualBox on Apple Silicon runs ARM guests. Make sure the chosen Vagrant boxes support `arm64`.
+  If you need cgroup enforcement in rootless mode and your system supports it, remove that override and restart the user service (`systemctl --user restart docker`). For example arm64 Ubuntu 24.04.
 
 ### Using Ansible Vault
 ```bash
