@@ -31,4 +31,3 @@ roles:
     version: 'v1.14.0'
     src: https://github.com/konstruktoid/ansible-role-docker-rootless.git
     scm: git
-
