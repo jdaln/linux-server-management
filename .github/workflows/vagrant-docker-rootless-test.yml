@@ -89,7 +89,8 @@ jobs:
           vagrant up noble
 
           # Double-check rootless Docker works from inside the VM.
-          vagrant ssh noble -c "sudo -iu dockeruser bash -lc 'set -euo pipefail; export PATH=\\$HOME/bin:\\$HOME/.local/bin:\\$PATH; export XDG_RUNTIME_DIR=/run/user/\\$(id -u); export DOCKER_HOST=unix:///run/user/\\$(id -u)/docker.sock; docker --version; docker info >/dev/null; docker run --rm hello-world >/dev/null'"
+          # Use single-quotes on the runner to avoid expanding $HOME/$(id -u) locally; let the VM shell expand them.
+          vagrant ssh noble -c 'sudo -iu dockeruser bash -lc "set -euo pipefail; export PATH=$HOME/bin:$HOME/.local/bin:$PATH; export XDG_RUNTIME_DIR=/run/user/$(id -u); export DOCKER_HOST=unix:///run/user/$(id -u)/docker.sock; docker --version; docker info >/dev/null; docker run --rm hello-world >/dev/null"'
 
       - name: Clean up Vagrant session
         if: always()
