@@ -3,6 +3,10 @@ profile: production
 exclude_paths:
   - .git/
   - .github/
+  - .ansible/
+  - .venv/
+  - .vagrant/
+  - CURRENT_CI_ISSUES/
   - .pre-commit-config.yaml
   - testing/test-new-version-hardening.yml
 warn_list:

@@ -1,9 +1,23 @@
-name: "deps: new konstruktoid.hardening version testing"
+name: "deps: new role version testing"
 
 on:
   pull_request: # Triggered on pull request events for the specified branches
     branches:
-      - main 
+      - main
+    paths:
+      - "setup-playbook.yml"
+      - "roles/**"
+      - "group_vars/**"
+      - "host_vars/**"
+      - "templates/**"
+      - "ansible.cfg"
+      - "Vagrantfile"
+      - "requirements.txt"
+      - "requirements.yml"
+      - "testing/**"
+      - ".ansible-lint"
+      - ".github/workflows/deps-new-version-test.yml"
+  workflow_dispatch: {}
 jobs:
   vagrant-test-new-deps-version:
     if: (!contains(github.event.pull_request.title, 'dependency ansible-lint')) # Checks the merge request except on some specific deps update
@@ -13,15 +27,37 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         # Checks out the repository code for use in actions, ensuring actions can interact with repository content
+
+      - name: Cache Vagrant boxes
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+        with:
+          path: ${{ env.VAGRANT_DIR }}
+          key: ${{ runner.os }}-vagrant-${{ hashFiles('**/Vagrantfile') }}
+          restore-keys: |
+            ${{ runner.os }}-vagrant-
+        # Restores and updates the downloaded Vagrant boxes to save time and bandwidth
+
+      - name: Cache Python packages
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/requirements.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+            ${{ runner.os }}-pip-
+        # Caches the downloaded Python packages to save time and bandwidth on subsequent runs
 
       - name: Install Dependencies for this to run
         run: |
           sudo apt update
-          sudo apt -y install apt-transport-https ca-certificates curl software-properties-common
+          sudo apt -y install apt-transport-https ca-certificates curl wget gnupg software-properties-common
           wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor | sudo tee /usr/share/keyrings/hashicorp-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
+          codename="$(lsb_release -cs)"
+          sudo tee /etc/apt/sources.list.d/hashicorp.list >/dev/null <<EOF
+          deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $codename main
+          EOF
           sudo apt-get update
           sudo apt-get install -y virtualbox virtualbox-dkms vagrant python3-pip
           #### patch until fix https://github.com/hashicorp/vagrant/issues/13404#issuecomment-2490437792
@@ -31,30 +67,38 @@ jobs:
           #####
           vagrant plugin install vagrant-disksize
 
+      - name: Disable KVM to allow VirtualBox
+        run: |
+          set -euxo pipefail
+          # GitHub-hosted runners often have KVM modules loaded, which prevents VirtualBox from using VT-x/AMD-V.
+          if lsmod | grep -q '^kvm'; then
+            sudo modprobe -r kvm_intel 2>/dev/null || true
+            sudo modprobe -r kvm_amd 2>/dev/null || true
+            sudo modprobe -r kvm 2>/dev/null || true
+          fi
+          if lsmod | grep -q '^kvm'; then
+            echo "KVM modules still loaded; VirtualBox will fail to start VMs."
+            lsmod | grep '^kvm' || true
+            exit 1
+          fi
+
       - name: Install requirements for Python and Ansible
         run: |
           pip install -r requirements.txt
           ansible-galaxy install -r requirements.yml
           ansible-galaxy install --no-deps -r testing/requirements.yml
 
-      - name: Cache Python packages
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt', '**/requirements.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-            ${{ runner.os }}-pip-
-        # Caches the downloaded Python packages to save time and bandwidth on subsequent runs
+      - name: Select role test playbook
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          if echo "$TITLE" | grep -qi "dependency konstruktoid.docker_rootless"; then
+            echo "TEST_PLAYBOOK=testing/test-new-version-docker-rootless.yml" >> "$GITHUB_ENV"
+          else
+            echo "TEST_PLAYBOOK=testing/test-new-version-hardening.yml" >> "$GITHUB_ENV"
+          fi
 
-      - name: Prepare Ansible playbook for testing and remove unwanted vars for this test
-        run: | 
-          cp testing/test-new-version-hardening.yml testing/being_tested.yml
-        # Copies the setup-playbook.yml to the testing directory and renames it for test execution
-
-
-      - name: Run vagrant up
-        run: vagrant up
+      - name: Run vagrant up (Debian + Ubuntu)
+        run: vagrant up bookworm noble debian13
         # Initializes and provisions the Vagrant environment as defined in Vagrantfile
 
       - name: SSH into the box after boot
@@ -67,15 +111,6 @@ jobs:
           done
         # Tests SSH into the Vagrant boxex and runs a simple echo command to ensure functionality
 
-      - name: Cache Vagrant boxes
-        uses: actions/cache@v5
-        with:
-          path: ${{ env.VAGRANT_DIR }}
-          key: ${{ runner.os }}-vagrant-${{ hashFiles('**/Vagrantfile') }}
-          restore-keys: |
-            ${{ runner.os }}-vagrant-
-        # Caches the downloaded Vagrant boxes to save time and bandwidth on subsequent runs
-      
       - name: Clean up Vagrant session
         run: vagrant halt && vagrant destroy -f
         if: always()
@@ -84,10 +119,15 @@ jobs:
   update-version-in-playbook:
     needs: vagrant-test-new-deps-version  # This job runs after vagrant-test-new-deps-version succeeds
     runs-on: ubuntu-latest
-    if: success() && contains(github.event.pull_request.title, 'dependency konstruktoid.hardening')
+    if: |
+      success() &&
+      (
+        contains(github.event.pull_request.title, 'dependency konstruktoid.hardening') ||
+        contains(github.event.pull_request.title, 'dependency konstruktoid.docker_rootless')
+      )
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 1
           ref: ${{ github.event.pull_request.head.ref }}
@@ -103,16 +143,91 @@ jobs:
         id: vars
         run: echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
 
-      - name: Update setup-playbook.yml with new version
+      - name: Resolve role tag to commit SHA
         run: |
-          sed -i "s/version: 'v[0-9]*\.[0-9]*\.[0-9]*'/version: '${{ env.VERSION }}'/" setup-playbook.yml
+          set -euo pipefail
+          TITLE="${{ github.event.pull_request.title }}"
+
+          if echo "$TITLE" | grep -qi "dependency konstruktoid.docker_rootless"; then
+            ROLE_REPO_URL="https://github.com/konstruktoid/ansible-role-docker-rootless.git"
+            TARGET_FILE="install-docker-rootless.yml"
+          else
+            ROLE_REPO_URL="https://github.com/konstruktoid/ansible-role-hardening.git"
+            TARGET_FILE="setup-playbook.yml"
+          fi
+
+          TAG="${{ env.VERSION }}"
+          SHA="$(git ls-remote "$ROLE_REPO_URL" "refs/tags/$TAG^{}" | awk '{print $1}' | head -n 1 || true)"
+          if [ -z "$SHA" ]; then
+            SHA="$(git ls-remote "$ROLE_REPO_URL" "refs/tags/$TAG" | awk '{print $1}' | head -n 1 || true)"
+          fi
+
+          if [ -z "$SHA" ]; then
+            echo "Failed to resolve tag $TAG in $ROLE_REPO_URL"
+            exit 1
+          fi
+
+          echo "ROLE_REPO_URL=$ROLE_REPO_URL" >> "$GITHUB_ENV"
+          echo "TARGET_FILE=$TARGET_FILE" >> "$GITHUB_ENV"
+          echo "ROLE_SHA=$SHA" >> "$GITHUB_ENV"
+
+      - name: Update pinned playbook with new version (commit SHA + tag comment)
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import re
+
+          target = os.environ["TARGET_FILE"]
+          repo = os.environ["ROLE_REPO_URL"]
+          sha = os.environ["ROLE_SHA"]
+          tag = os.environ["VERSION"]
+
+          p = pathlib.Path(target)
+          lines = p.read_text().splitlines(True)
+
+          repo_re = re.compile(rf"^\\s*repo:\\s*{re.escape(repo)}\\s*$")
+          version_re = re.compile(r"^(\\s*)version:\\s*.*$")
+
+          out = []
+          i = 0
+          updated = False
+          while i < len(lines):
+            line = lines[i]
+            out.append(line)
+            if repo_re.search(line):
+              j = i + 1
+              while j < len(lines) and not version_re.match(lines[j]):
+                out.append(lines[j])
+                j += 1
+              if j >= len(lines):
+                raise SystemExit(f"Found repo line for {repo} but no subsequent version line in {target}")
+              indent = version_re.match(lines[j]).group(1)
+              out.append(f"{indent}version: '{sha}'  # {tag}\\n")
+              updated = True
+              out.extend(lines[j + 1 :])
+              break
+            i += 1
+
+          if not updated:
+            raise SystemExit(f"Did not find repo line for {repo} in {target}")
+
+          p.write_text("".join(out))
+          PY
 
       - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions@users.noreply.github.com"
-          git add setup-playbook.yml
-          git commit -m "Update konstruktoid.hardening version in use to version ${{ env.VERSION }}"
+          TITLE="${{ github.event.pull_request.title }}"
+          if echo "$TITLE" | grep -qi "dependency konstruktoid.docker_rootless"; then
+            git add install-docker-rootless.yml
+            git commit -m "Update konstruktoid.docker_rootless version in use to version ${{ env.VERSION }}"
+          else
+            git add setup-playbook.yml
+            git commit -m "Update konstruktoid.hardening version in use to version ${{ env.VERSION }}"
+          fi
           git push
 
       - name: Check for unauthorized file modifications due to being on public workers with write access to repo
@@ -120,8 +235,8 @@ jobs:
           CHANGES=$(git diff --name-only HEAD~1)
           echo "Changed files:"
           echo "$CHANGES"
-          # Check if there are any changes that do NOT match 'setup-playbook.yml'
-          if echo "$CHANGES" | grep -vqE '^setup-playbook\.yml$'; then
+          # Check if there are any changes that are NOT allowed.
+          if echo "$CHANGES" | grep -vqE '^(setup-playbook\.yml|install-docker-rootless\.yml)$'; then
             echo "PR contains unauthorized file modifications."
             exit 1  # Fail the action if unauthorized changes are detected
           else
