@@ -93,6 +93,8 @@
           become: true
       vars:
         users_add_userlist: "{{ SSH_USERLIST }}"
+        # users_add uses enable_2fa (role var), keep as-is.
+        # noqa: var-naming[no-role-prefix]
         enable_2fa: "{{ ENABLE_2FA }}"
       when: MANAGE_USERS is not defined or MANAGE_USERS | bool
       tags: [users, user-management]
@@ -127,7 +129,7 @@
       ansible.builtin.git:
         repo: https://github.com/konstruktoid/ansible-role-hardening.git
         dest: "{{ lookup('env', 'HOME') }}/.ansible/roles/konstruktoid.hardening"
-        version: 'v4.2.0'  # Pinned version for reproducibility
+        version: '4da78c8723d7792dbce73ce5aea47d8144f4596f'  # v4.3.0
       delegate_to: localhost
       run_once: true
       tags: [hardening, setup, role-download]

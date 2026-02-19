@@ -16,8 +16,8 @@ This repository provides a collection of Ansible playbooks and roles designed to
 ## Supported Systems
 
 - **Debian**: Bookworm (12) and newer
-- **Ubuntu**: Jammy (22.04 LTS) and newer
-- **Architecture**: x86_64
+- **Ubuntu**: Noble (24.04 LTS) and newer
+- **Architecture**: x86_64 and aarch64 (arm64 - only Ubuntu 24.04 tested)
 
 ## Prerequisites
 
@@ -31,8 +31,10 @@ sudo apt install virtualbox vagrant python3-pip
 ```bash
 brew install python
 python3 -m ensurepip --upgrade
+# Vagrant (HashiCorp tap)
+brew install hashicorp/tap/hashicorp-vagrant
+
 brew install --cask virtualbox
-brew install vagrant
 ```
 
 ## Installation
@@ -150,14 +152,25 @@ ansible-playbook -i inventories/your-inventory/inventory \
 Test playbooks on virtual machines before deploying to production:
 
 ```bash
-# Install testing dependencies
-ansible-galaxy install -r testing/requirements.yml
+# Ensure `ansible-playbook` is on your PATH (Vagrant's Ansible provisioner uses the host install).
+# One reliable option is a local venv:
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
 
-# Start test VMs (Debian Bookworm and Ubuntu Jammy)
-vagrant up
+# Install Ansible dependencies used by the test playbooks
+ansible-galaxy install -r requirements.yml
+ansible-galaxy install --no-deps -r testing/requirements.yml
 
-# Run tests against VMs
-ansible-playbook -i testing/inventory test-playbook.yml
+# Pick the playbook to run via the Vagrant Ansible provisioner.
+# If not set, Vagrant defaults to: testing/test-new-version-hardening.yml
+export TEST_PLAYBOOK=testing/e2e-hardened-then-install-docker-rootless.yml
+# Other useful options:
+# export TEST_PLAYBOOK=testing/test-new-version-hardening.yml
+# export TEST_PLAYBOOK=testing/test-new-version-docker-rootless.yml
+
+# Start and provision test VMs (Debian 12/13, Ubuntu 24.04)
+PATH="$PWD/.venv/bin:$PATH" vagrant up
 ```
 
 ### Testing Individual Roles
@@ -174,6 +187,24 @@ ansible-playbook -i testing/inventory \
 - **Ansible Vault**: Store sensitive variables (passwords, keys) using `ansible-vault`
 - **Least Privilege**: Non-admin users receive minimal sudo permissions
 - **Initial Password Policy**: Users must change passwords on first login
+
+## CI / Testing Pipeline
+
+GitHub Actions runs a few gates:
+
+- **Lint**: ansible-lint/syntax checks against repository playbooks.
+- **Integration (Vagrant)**: provisions one or more VMs and runs the playbooks end-to-end (VirtualBox-based).
+- **Integration (Vagrant, ARM64)**: same as above, but runs on a self-hosted `macOS` `ARM64` runner (VirtualBox on Apple Silicon).
+- **Deps: new role version testing**: for dependency update PRs, runs Vagrant with a role-focused test playbook before auto-updating the pinned SHA in the top-level playbook.
+
+The Docker rootless integration test is intentionally end-to-end: it assumes the baseline hardening was applied first.
+
+## Known Limitations
+
+- **Rootless Docker cgroups**: if Docker reports `Cgroup Driver: none` in rootless mode, resource limits (`--memory`, `--cpus`, `--pids-limit`) are not enforced.
+  This repo currently writes `/home/dockeruser/.config/docker/daemon.json` to force `native.cgroupdriver=cgroupfs` as a workaround in some environments, which can cause cgroups to be effectively disabled in others.
+  To verify: run `docker info | grep -i cgroup` as the rootless Docker user.
+  If you need cgroup enforcement in rootless mode and your system supports it, remove that override and restart the user service (`systemctl --user restart docker`). For example arm64 Ubuntu 24.04.
 
 ### Using Ansible Vault
 ```bash

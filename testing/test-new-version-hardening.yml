@@ -2,6 +2,9 @@
 - name: Include the konstruktoid.hardening role
   hosts: all
   any_errors_fatal: true
+  vars:
+    # Keep CI/Vagrant tests deterministic and avoid disk-space failures during initramfs/kernel upgrades.
+    system_upgrade: false
   tasks:
     - name: Include role
       ansible.builtin.import_role:
